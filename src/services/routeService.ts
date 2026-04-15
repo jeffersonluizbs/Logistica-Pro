@@ -52,5 +52,12 @@ export const routeService = {
     await updateDoc(routeRef, {
       ...formData
     });
+  },
+
+  releaseRoute: async (id: string): Promise<void> => {
+    const routeRef = doc(db, COLLECTION_NAME, id);
+    await updateDoc(routeRef, {
+      releasedToLoading: true
+    });
   }
 };

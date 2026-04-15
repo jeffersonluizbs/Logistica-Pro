@@ -15,6 +15,7 @@ export interface Route {
   cargoType: 'plastico' | 'porcelana' | 'consolidado';
   deliveries: DeliveryDetail[];
   deliveryDate: string;
+  releasedToLoading?: boolean;
   createdAt: number;
   createdBy: string;
 }

@@ -24,7 +24,13 @@ import {
   Menu,
   X,
   ChevronDown,
-  ChevronUp
+  ChevronUp,
+  LayoutDashboard,
+  ClipboardList,
+  Send,
+  Clock,
+  CheckCircle2,
+  AlertCircle
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -72,6 +78,7 @@ import {
 } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { routeService } from '@/services/routeService';
+import { loadingService, LoadingCard } from '@/services/loadingService';
 import { Route, RouteFormData, DeliveryDetail } from '@/types';
 import { auth } from '@/firebase';
 
@@ -109,6 +116,9 @@ export default function App() {
   const [filterDate, setFilterDate] = useState<string>('');
   const [loading, setLoading] = useState(true);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [activeTab, setActiveTab] = useState<'logistica' | 'carregamento'>('logistica');
+  const [loadingCards, setLoadingCards] = useState<LoadingCard[]>([]);
+  const [loadingStats, setLoadingStats] = useState<any>(null);
 
   useEffect(() => {
     const unsubscribeAuth = onAuthStateChanged(auth, (currentUser) => {
@@ -118,6 +128,21 @@ export default function App() {
 
     return () => unsubscribeAuth();
   }, []);
+
+  useEffect(() => {
+    if (user && activeTab === 'carregamento') {
+      const fetchLoadingData = async () => {
+        const data = await loadingService.getLoadingData();
+        if (data) {
+          setLoadingCards(data.cards);
+          setLoadingStats(data.painel);
+        }
+      };
+      fetchLoadingData();
+      const interval = setInterval(fetchLoadingData, 10000);
+      return () => clearInterval(interval);
+    }
+  }, [user, activeTab]);
 
   useEffect(() => {
     if (user) {
@@ -225,6 +250,22 @@ export default function App() {
     setIsDialogOpen(false);
     setFormData(INITIAL_FORM_DATA);
     setEditingId(null);
+  };
+
+  const handleReleaseRoute = async (route: Route) => {
+    if (window.confirm(`Deseja liberar a rota #${route.routeNumber} para o painel de carregamento?`)) {
+      try {
+        const success = await loadingService.releaseRoute(route);
+        if (success) {
+          await routeService.releaseRoute(route.id);
+          alert("Rota liberada com sucesso!");
+        } else {
+          alert("Erro ao liberar rota. Verifique a configuração do Apps Script.");
+        }
+      } catch (error) {
+        console.error("Erro ao liberar rota:", error);
+      }
+    }
   };
 
   const filteredRoutes = routes.filter(route => {
@@ -540,176 +581,206 @@ export default function App() {
           <div className="w-10" />
         </div>
 
-        {/* Stats Bar */}
-        <section className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <Card className="p-4 bg-white border-border shadow-sm flex flex-col justify-between">
-            <div>
-              <p className="text-[11px] font-bold uppercase text-muted-foreground mb-1">Total Geral</p>
-              <p className="text-[24px] font-bold text-slate-900">{stats.total}</p>
-            </div>
-            <div className="mt-4 pt-4 border-t border-slate-100 flex justify-between text-[11px]">
-              <span className="text-blue-600 font-bold">NOVAS: {stats.nova.count}</span>
-              <span className="text-orange-600 font-bold">ANTIGAS: {stats.antiga.count}</span>
-            </div>
-          </Card>
+        {/* Tabs */}
+        <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-lg w-fit mb-2">
+          <Button 
+            variant={activeTab === 'logistica' ? 'default' : 'ghost'} 
+            size="sm" 
+            onClick={() => setActiveTab('logistica')}
+            className="h-8 px-4 text-[12px] font-bold gap-2"
+          >
+            <LayoutDashboard className="w-4 h-4" />
+            LOGÍSTICA
+          </Button>
+          <Button 
+            variant={activeTab === 'carregamento' ? 'default' : 'ghost'} 
+            size="sm" 
+            onClick={() => setActiveTab('carregamento')}
+            className="h-8 px-4 text-[12px] font-bold gap-2"
+          >
+            <Truck className="w-4 h-4" />
+            CARREGAMENTO
+          </Button>
+        </div>
 
-          <Card className="p-4 bg-white border-border shadow-sm">
-            <div className="flex justify-between items-start mb-3">
-              <div>
-                <p className="text-[11px] font-bold uppercase text-blue-600">Status Carregamento (Novas)</p>
-                <p className="text-[20px] font-bold text-slate-900">{stats.nova.loading}%</p>
-              </div>
-              <Badge className="bg-blue-50 text-blue-600 border-blue-100 hover:bg-blue-50">NOVAS</Badge>
-            </div>
-            <div className="grid grid-cols-3 gap-2 text-[10px] font-bold uppercase">
-              <div className="flex flex-col">
-                <span className="text-muted-foreground">Plástico</span>
-                <span className="text-slate-900">{stats.nova.cargo.plastico}</span>
-              </div>
-              <div className="flex flex-col">
-                <span className="text-muted-foreground">Porcelana</span>
-                <span className="text-slate-900">{stats.nova.cargo.porcelana}</span>
-              </div>
-              <div className="flex flex-col">
-                <span className="text-muted-foreground">Consol.</span>
-                <span className="text-slate-900">{stats.nova.cargo.consolidado}</span>
-              </div>
-            </div>
-          </Card>
+        {activeTab === 'logistica' ? (
+          <>
+            {/* Stats Bar */}
+            <section className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <Card className="p-4 bg-white border-border shadow-sm flex flex-col justify-between">
+                <div>
+                  <p className="text-[11px] font-bold uppercase text-muted-foreground mb-1">Total Geral</p>
+                  <p className="text-[24px] font-bold text-slate-900">{stats.total}</p>
+                </div>
+                <div className="mt-4 pt-4 border-t border-slate-100 flex justify-between text-[11px]">
+                  <span className="text-blue-600 font-bold">NOVAS: {stats.nova.count}</span>
+                  <span className="text-orange-600 font-bold">ANTIGAS: {stats.antiga.count}</span>
+                </div>
+              </Card>
 
-          <Card className="p-4 bg-white border-border shadow-sm">
-            <div className="flex justify-between items-start mb-3">
-              <div>
-                <p className="text-[11px] font-bold uppercase text-orange-600">Status Carregamento (Antigas)</p>
-                <p className="text-[20px] font-bold text-slate-900">{stats.antiga.loading}%</p>
-              </div>
-              <Badge className="bg-orange-50 text-orange-600 border-orange-100 hover:bg-orange-50">ANTIGAS</Badge>
-            </div>
-            <div className="grid grid-cols-3 gap-2 text-[10px] font-bold uppercase">
-              <div className="flex flex-col">
-                <span className="text-muted-foreground">Plástico</span>
-                <span className="text-slate-900">{stats.antiga.cargo.plastico}</span>
-              </div>
-              <div className="flex flex-col">
-                <span className="text-muted-foreground">Porcelana</span>
-                <span className="text-slate-900">{stats.antiga.cargo.porcelana}</span>
-              </div>
-              <div className="flex flex-col">
-                <span className="text-muted-foreground">Consol.</span>
-                <span className="text-slate-900">{stats.antiga.cargo.consolidado}</span>
-              </div>
-            </div>
-          </Card>
-        </section>
+              <Card className="p-4 bg-white border-border shadow-sm">
+                <div className="flex justify-between items-start mb-3">
+                  <div>
+                    <p className="text-[11px] font-bold uppercase text-blue-600">Status Carregamento (Novas)</p>
+                    <p className="text-[20px] font-bold text-slate-900">{stats.nova.loading}%</p>
+                  </div>
+                  <Badge className="bg-blue-50 text-blue-600 border-blue-100 hover:bg-blue-50">NOVAS</Badge>
+                </div>
+                <div className="grid grid-cols-3 gap-2 text-[10px] font-bold uppercase">
+                  <div className="flex flex-col">
+                    <span className="text-muted-foreground">Plástico</span>
+                    <span className="text-slate-900">{stats.nova.cargo.plastico}</span>
+                  </div>
+                  <div className="flex flex-col">
+                    <span className="text-muted-foreground">Porcelana</span>
+                    <span className="text-slate-900">{stats.nova.cargo.porcelana}</span>
+                  </div>
+                  <div className="flex flex-col">
+                    <span className="text-muted-foreground">Consol.</span>
+                    <span className="text-slate-900">{stats.nova.cargo.consolidado}</span>
+                  </div>
+                </div>
+              </Card>
 
-        {/* Search & Table Area */}
-        <section className="flex-1 bg-white border border-border rounded-[10px] flex flex-col overflow-hidden">
-          <div className="p-4 border-b border-border bg-slate-50/50 flex flex-wrap items-center justify-between gap-4">
-            <div className="flex items-center gap-3 flex-1 min-w-[300px]">
-              <Button 
-                variant="outline" 
-                size="icon" 
-                className="hidden lg:flex h-8 w-8" 
-                onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-                title={isSidebarOpen ? "Esconder Menu" : "Mostrar Menu"}
-              >
-                <Menu className="w-4 h-4" />
-              </Button>
-              <div className="relative flex-1">
-                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
-                <Input 
-                  placeholder="Buscar por rota, cliente, local, pedido ou nota..." 
-                  className="pl-8 h-8 text-[12px] bg-white"
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                />
-              </div>
-            </div>
-            
-            <div className="flex items-center gap-4">
-              {(searchTerm || filterDate || filterUf !== 'all') && (
-                <Button 
-                  variant="ghost" 
-                  size="sm" 
-                  onClick={() => {
-                    setSearchTerm('');
-                    setFilterDate('');
-                    setFilterUf('all');
-                  }}
-                  className="h-8 text-[11px] font-bold text-destructive hover:text-destructive hover:bg-destructive/10"
-                >
-                  LIMPAR FILTROS
-                </Button>
-              )}
-              <div className="flex items-center gap-2">
-                <Label className="text-[11px] font-bold uppercase text-muted-foreground whitespace-nowrap">Data:</Label>
-                <Input 
-                  type="date"
-                  className="h-8 w-32 text-[12px] bg-white px-2"
-                  value={filterDate}
-                  onChange={(e) => setFilterDate(e.target.value)}
-                />
-                {filterDate && (
+              <Card className="p-4 bg-white border-border shadow-sm">
+                <div className="flex justify-between items-start mb-3">
+                  <div>
+                    <p className="text-[11px] font-bold uppercase text-orange-600">Status Carregamento (Antigas)</p>
+                    <p className="text-[20px] font-bold text-slate-900">{stats.antiga.loading}%</p>
+                  </div>
+                  <Badge className="bg-orange-50 text-orange-600 border-orange-100 hover:bg-orange-50">ANTIGAS</Badge>
+                </div>
+                <div className="grid grid-cols-3 gap-2 text-[10px] font-bold uppercase">
+                  <div className="flex flex-col">
+                    <span className="text-muted-foreground">Plástico</span>
+                    <span className="text-slate-900">{stats.antiga.cargo.plastico}</span>
+                  </div>
+                  <div className="flex flex-col">
+                    <span className="text-muted-foreground">Porcelana</span>
+                    <span className="text-slate-900">{stats.antiga.cargo.porcelana}</span>
+                  </div>
+                  <div className="flex flex-col">
+                    <span className="text-muted-foreground">Consol.</span>
+                    <span className="text-slate-900">{stats.antiga.cargo.consolidado}</span>
+                  </div>
+                </div>
+              </Card>
+            </section>
+
+            {/* Search & Table Area */}
+            <section className="flex-1 bg-white border border-border rounded-[10px] flex flex-col overflow-hidden">
+              <div className="p-4 border-b border-border bg-slate-50/50 flex flex-wrap items-center justify-between gap-4">
+                <div className="flex items-center gap-3 flex-1 min-w-[300px]">
                   <Button 
-                    variant="ghost" 
+                    variant="outline" 
                     size="icon" 
-                    className="h-6 w-6 text-muted-foreground"
-                    onClick={() => setFilterDate('')}
+                    className="hidden lg:flex h-8 w-8" 
+                    onClick={() => setIsSidebarOpen(!isSidebarOpen)}
+                    title={isSidebarOpen ? "Esconder Menu" : "Mostrar Menu"}
                   >
-                    <Trash2 className="w-3 h-3" />
+                    <Menu className="w-4 h-4" />
                   </Button>
-                )}
-              </div>
-
-              <div className="flex items-center gap-2">
-                <Label className="text-[11px] font-bold uppercase text-muted-foreground">UF:</Label>
-                <Select value={filterUf} onValueChange={setFilterUf}>
-                  <SelectTrigger className="h-8 w-24 text-[12px] bg-white">
-                    <SelectValue placeholder="Todas" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">Todas</SelectItem>
-                    {UFS.map(uf => (
-                      <SelectItem key={uf} value={uf}>{uf}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-          </div>
-
-          <div className="flex-1 overflow-auto">
-            <div className="space-y-6 p-4">
-              {/* Rota Nova Section */}
-              <div className="space-y-2">
-                <div className="flex items-center gap-2 border-b border-border pb-1">
-                  <Badge className="bg-blue-600 text-white hover:bg-blue-600">ROTAS NOVAS</Badge>
-                  <span className="text-[11px] text-muted-foreground font-bold">{routesNova.length} registros</span>
+                  <div className="relative flex-1">
+                    <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
+                    <Input 
+                      placeholder="Buscar por rota, cliente, local, pedido ou nota..." 
+                      className="pl-8 h-8 text-[12px] bg-white"
+                      value={searchTerm}
+                      onChange={(e) => setSearchTerm(e.target.value)}
+                    />
+                  </div>
                 </div>
-                <RouteTable 
-                  routes={routesNova} 
-                  user={user} 
-                  onEdit={handleEdit} 
-                  onDelete={handleDelete} 
-                />
+                
+                <div className="flex items-center gap-4">
+                  {(searchTerm || filterDate || filterUf !== 'all') && (
+                    <Button 
+                      variant="ghost" 
+                      size="sm" 
+                      onClick={() => {
+                        setSearchTerm('');
+                        setFilterDate('');
+                        setFilterUf('all');
+                      }}
+                      className="h-8 text-[11px] font-bold text-destructive hover:text-destructive hover:bg-destructive/10"
+                    >
+                      LIMPAR FILTROS
+                    </Button>
+                  )}
+                  <div className="flex items-center gap-2">
+                    <Label className="text-[11px] font-bold uppercase text-muted-foreground whitespace-nowrap">Data:</Label>
+                    <Input 
+                      type="date"
+                      className="h-8 w-32 text-[12px] bg-white px-2"
+                      value={filterDate}
+                      onChange={(e) => setFilterDate(e.target.value)}
+                    />
+                    {filterDate && (
+                      <Button 
+                        variant="ghost" 
+                        size="icon" 
+                        className="h-6 w-6 text-muted-foreground"
+                        onClick={() => setFilterDate('')}
+                      >
+                        <Trash2 className="w-3 h-3" />
+                      </Button>
+                    )}
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <Label className="text-[11px] font-bold uppercase text-muted-foreground">UF:</Label>
+                    <Select value={filterUf} onValueChange={setFilterUf}>
+                      <SelectTrigger className="h-8 w-24 text-[12px] bg-white">
+                        <SelectValue placeholder="Todas" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">Todas</SelectItem>
+                        {UFS.map(uf => (
+                          <SelectItem key={uf} value={uf}>{uf}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
               </div>
 
-              {/* Rota Antiga Section */}
-              <div className="space-y-2">
-                <div className="flex items-center gap-2 border-b border-border pb-1">
-                  <Badge className="bg-orange-600 text-white hover:bg-orange-600">ROTAS ANTIGAS</Badge>
-                  <span className="text-[11px] text-muted-foreground font-bold">{routesAntiga.length} registros</span>
+              <div className="flex-1 overflow-auto">
+                <div className="space-y-6 p-4">
+                  {/* Rota Nova Section */}
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-2 border-b border-border pb-1">
+                      <Badge className="bg-blue-600 text-white hover:bg-blue-600">ROTAS NOVAS</Badge>
+                      <span className="text-[11px] text-muted-foreground font-bold">{routesNova.length} registros</span>
+                    </div>
+                    <RouteTable 
+                      routes={routesNova} 
+                      user={user} 
+                      onEdit={handleEdit} 
+                      onDelete={handleDelete} 
+                      onRelease={handleReleaseRoute}
+                    />
+                  </div>
+
+                  {/* Rota Antiga Section */}
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-2 border-b border-border pb-1">
+                      <Badge className="bg-orange-600 text-white hover:bg-orange-600">ROTAS ANTIGAS</Badge>
+                      <span className="text-[11px] text-muted-foreground font-bold">{routesAntiga.length} registros</span>
+                    </div>
+                    <RouteTable 
+                      routes={routesAntiga} 
+                      user={user} 
+                      onEdit={handleEdit} 
+                      onDelete={handleDelete} 
+                      onRelease={handleReleaseRoute}
+                    />
+                  </div>
                 </div>
-                <RouteTable 
-                  routes={routesAntiga} 
-                  user={user} 
-                  onEdit={handleEdit} 
-                  onDelete={handleDelete} 
-                />
               </div>
-            </div>
-          </div>
-        </section>
+            </section>
+          </>
+        ) : (
+          <LoadingPanel cards={loadingCards} stats={loadingStats} />
+        )}
       </main>
 
       {/* Edit Dialog (Keep for functionality) */}
@@ -727,9 +798,10 @@ interface RouteTableProps {
   user: User;
   onEdit: (route: Route) => void;
   onDelete: (id: string, createdBy: string) => void;
+  onRelease: (route: Route) => void;
 }
 
-function RouteTable({ routes, user, onEdit, onDelete }: RouteTableProps) {
+function RouteTable({ routes, user, onEdit, onDelete, onRelease }: RouteTableProps) {
   const getCargoBadgeColor = (type: string) => {
     switch (type) {
       case 'plastico': return 'bg-emerald-100 text-emerald-700 border-emerald-200';
@@ -747,7 +819,7 @@ function RouteTable({ routes, user, onEdit, onDelete }: RouteTableProps) {
           <TableHead className="w-[100px] font-bold py-2 px-3">Carga</TableHead>
           <TableHead className="font-bold py-2 px-3">Entregas / Clientes</TableHead>
           <TableHead className="w-[100px] font-bold py-2 px-3">Data</TableHead>
-          <TableHead className="w-[80px] text-right font-bold py-2 px-3">Ações</TableHead>
+          <TableHead className="w-[120px] text-right font-bold py-2 px-3">Ações</TableHead>
         </TableRow>
       </TableHeader>
       <TableBody>
@@ -785,6 +857,17 @@ function RouteTable({ routes, user, onEdit, onDelete }: RouteTableProps) {
                 <div className="flex justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                   {route.createdBy === user.uid && (
                     <>
+                      {!route.releasedToLoading && (
+                        <Button 
+                          variant="ghost" 
+                          size="icon" 
+                          className="h-7 w-7 text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+                          onClick={() => onRelease(route)}
+                          title="Liberar para Carregamento"
+                        >
+                          <Send className="w-3.5 h-3.5" />
+                        </Button>
+                      )}
                       <Button 
                         variant="ghost" 
                         size="icon" 
@@ -816,5 +899,128 @@ function RouteTable({ routes, user, onEdit, onDelete }: RouteTableProps) {
         )}
       </TableBody>
     </Table>
+  );
+}
+
+function LoadingPanel({ cards, stats }: { cards: LoadingCard[], stats: any }) {
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'Pendente': return 'bg-slate-500';
+      case 'Separando': return 'bg-orange-500 animate-pulse';
+      case 'Separado': return 'bg-purple-600';
+      case 'Carregando': return 'bg-red-500 animate-pulse';
+      case 'Embarcado': return 'bg-green-600';
+      default: return 'bg-slate-400';
+    }
+  };
+
+  return (
+    <div className="flex-1 flex flex-col gap-5 overflow-hidden">
+      {/* Loading Stats */}
+      <section className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3">
+        <Card className="p-3 text-center border-b-4 border-slate-600">
+          <p className="text-[10px] font-bold text-muted-foreground uppercase">Total</p>
+          <p className="text-xl font-bold">{cards.length}</p>
+        </Card>
+        <Card className="p-3 text-center border-b-4 border-red-600 bg-red-50">
+          <p className="text-[10px] font-bold text-red-600 uppercase">Acumuladas</p>
+          <p className="text-xl font-bold text-red-600">{cards.filter(c => c.isAcumulado).length}</p>
+        </Card>
+        <Card className="p-3 text-center border-b-4 border-slate-400">
+          <p className="text-[10px] font-bold text-muted-foreground uppercase">Pendente</p>
+          <p className="text-xl font-bold">{cards.filter(c => c.status === 'Pendente').length}</p>
+        </Card>
+        <Card className="p-3 text-center border-b-4 border-orange-500">
+          <p className="text-[10px] font-bold text-orange-600 uppercase">Separando</p>
+          <p className="text-xl font-bold">{cards.filter(c => c.status === 'Separando').length}</p>
+        </Card>
+        <Card className="p-3 text-center border-b-4 border-purple-600">
+          <p className="text-[10px] font-bold text-purple-600 uppercase">Separados</p>
+          <p className="text-xl font-bold">{cards.filter(c => c.status === 'Separado').length}</p>
+        </Card>
+        <Card className="p-3 text-center border-b-4 border-red-500">
+          <p className="text-[10px] font-bold text-red-600 uppercase">Carregando</p>
+          <p className="text-xl font-bold">{cards.filter(c => c.status === 'Carregando').length}</p>
+        </Card>
+        <Card className="p-3 text-center border-b-4 border-green-600">
+          <p className="text-[10px] font-bold text-green-600 uppercase">Embarcados</p>
+          <p className="text-xl font-bold">{cards.filter(c => c.status === 'Embarcado').length}</p>
+        </Card>
+      </section>
+
+      {/* Cards Grid */}
+      <div className="flex-1 overflow-auto">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 pb-6">
+          {cards.length > 0 ? (
+            cards.map((card) => (
+              <Card key={card.id} className="overflow-hidden border-l-4 border-slate-200 shadow-sm flex flex-col" style={{ borderLeftColor: getStatusColor(card.status).split(' ')[0] }}>
+                <CardHeader className="p-4 pb-2 relative">
+                  <div className="absolute top-4 right-4">
+                    <Badge className={`${getStatusColor(card.status)} text-white border-none text-[10px] font-bold`}>
+                      {card.status}
+                    </Badge>
+                  </div>
+                  <CardTitle className="text-[15px] font-bold pr-20 leading-tight">
+                    Rota: {card.rota} ({card.nRota})
+                    {card.nRotaLog && <span className="text-muted-foreground ml-1"> - {card.nRotaLog}</span>}
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="p-4 pt-0 flex-1 flex flex-col gap-3">
+                  {card.isAcumulado && (
+                    <div className="bg-red-50 border border-red-100 text-red-600 p-2 rounded text-[10px] font-bold flex items-center gap-2">
+                      <AlertCircle className="w-3 h-3" />
+                      CARD DO DIA ANTERIOR QUE NÃO FOI CARREGADO
+                    </div>
+                  )}
+
+                  <div className="bg-red-50 border-2 border-red-600 p-2 rounded text-center">
+                    <p className="text-[18px] font-black text-red-600 uppercase tracking-widest">DOCA {card.doca || '-'}</p>
+                  </div>
+                  
+                  <div className="border-b border-slate-100 pb-2">
+                    <p className="text-[11px] font-bold text-slate-600 uppercase">PLANTA: {card.planta || '-'}</p>
+                  </div>
+
+                  <div className="bg-slate-50 p-3 rounded-lg space-y-1 text-[12px]">
+                    <p><span className="text-muted-foreground font-medium">Motorista:</span> <span className="font-bold">{card.motorista || 'N/I'}</span></p>
+                    <p><span className="text-muted-foreground font-medium">Valor:</span> <span className="font-bold text-green-600">{card.valor || 'R$ 0,00'}</span></p>
+                    <p><span className="text-muted-foreground font-medium">Veículo:</span> <span className="font-bold">{card.veiculo || 'N/I'}</span> <span className="text-muted-foreground mx-1">|</span> <span className="text-muted-foreground font-medium">Conf:</span> <span className="font-bold">{card.conferente || 'N/I'}</span></p>
+                    <p><span className="text-muted-foreground font-medium">Qtd:</span> <span className="font-bold">{card.qtd} pedidos</span></p>
+                  </div>
+
+                  <div className="space-y-1 text-[11px]">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-1.5 text-slate-600">
+                        <Clock className="w-3 h-3" />
+                        <span>Separação:</span>
+                        <span className="font-bold">{card.iniSep || '--:--'} às {card.fimSep || '--:--'}</span>
+                      </div>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-1.5 text-slate-600">
+                        <Truck className="w-3 h-3" />
+                        <span>Carregamento:</span>
+                        <span className="font-bold">{card.iniCar || '--:--'} às {card.fimCar || '--:--'}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {card.status === 'Embarcado' && (
+                    <div className="mt-2 pt-2 border-t border-slate-100 flex items-center justify-center gap-2 text-green-600 font-bold text-[13px]">
+                      <CheckCircle2 className="w-4 h-4" />
+                      EMBARQUE CONCLUÍDO
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            ))
+          ) : (
+            <div className="col-span-full h-40 flex flex-center justify-center items-center text-muted-foreground italic">
+              Nenhum card de carregamento encontrado.
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
   );
 }
