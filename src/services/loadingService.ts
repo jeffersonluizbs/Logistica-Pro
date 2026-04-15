@@ -36,33 +36,22 @@ export const loadingService = {
     }
 
     try {
-      const response = await fetch(GAS_WEB_APP_URL, {
+      // Usando no-cors com POST novamente, mas passando os dados como form-data
+      // que é mais amigável para o Apps Script
+      const formData = new FormData();
+      formData.append('action', 'salvarNovoCard');
+      formData.append('rota', route.deliveries.map(d => d.clientName).join(', '));
+      formData.append('dataSep', new Date().toLocaleDateString('pt-BR'));
+      formData.append('qtd', route.deliveries.length.toString());
+      formData.append('nRotaLog', route.routeNumber);
+
+      await fetch(GAS_WEB_APP_URL, {
         method: 'POST',
-        mode: 'no-cors', // GAS Web Apps geralmente exigem no-cors ou redirecionamento
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          action: 'salvarNovoCard',
-          dados: {
-            rota: route.deliveries.map(d => d.clientName).join(', '),
-            dataSep: new Date().toLocaleDateString('pt-BR'),
-            veiculo: '', // Será preenchido no painel de carregamento
-            conferente: '',
-            nRota: '', 
-            valor: 'R$ 0,00',
-            iniSep: '',
-            fimSep: '',
-            qtd: route.deliveries.length.toString(),
-            iniCar: '',
-            fimCar: '',
-            motorista: '',
-            doca: '',
-            planta: '',
-            nRotaLog: route.routeNumber
-          }
-        }),
+        mode: 'no-cors',
+        body: formData
       });
+      
+      // Como usamos no-cors, não podemos ler a resposta, assumimos sucesso se não der erro de rede
       return true;
     } catch (error) {
       console.error('Erro ao liberar rota:', error);
@@ -74,13 +63,25 @@ export const loadingService = {
   getLoadingData: async (): Promise<{ cards: LoadingCard[], painel: any } | null> => {
     if (!GAS_WEB_APP_URL) return null;
 
-    try {
-      const response = await fetch(`${GAS_WEB_APP_URL}?action=getDadosIniciais`);
-      const data = await response.json();
-      return data;
-    } catch (error) {
-      console.error('Erro ao buscar dados do carregamento:', error);
-      return null;
-    }
+    return new Promise((resolve) => {
+      // Usando JSONP para contornar o CORS na leitura
+      const callbackName = 'jsonp_callback_' + Math.round(100000 * Math.random());
+      
+      (window as any)[callbackName] = (data: any) => {
+        delete (window as any)[callbackName];
+        document.body.removeChild(script);
+        resolve(data);
+      };
+
+      const script = document.createElement('script');
+      script.src = `${GAS_WEB_APP_URL}?action=getDadosIniciais&callback=${callbackName}`;
+      script.onerror = () => {
+        delete (window as any)[callbackName];
+        document.body.removeChild(script);
+        resolve(null);
+      };
+      
+      document.body.appendChild(script);
+    });
   }
 };
