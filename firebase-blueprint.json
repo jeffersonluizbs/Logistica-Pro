@@ -1,0 +1,28 @@
+{
+  "entities": {
+    "Route": {
+      "title": "Route",
+      "description": "Uma rota logística fechada",
+      "type": "object",
+      "properties": {
+        "routeNumber": { "type": "string", "description": "Número identificador da rota" },
+        "deliveryLocation": { "type": "string", "description": "Local de entrega" },
+        "uf": { "type": "string", "description": "Estado (UF)" },
+        "region": { "type": "string", "description": "Região da UF" },
+        "clientName": { "type": "string", "description": "Nome do cliente" },
+        "orderNumber": { "type": "string", "description": "Número do pedido" },
+        "invoiceNumber": { "type": "string", "description": "Número da nota fiscal" },
+        "deliveryDate": { "type": "string", "description": "Data de entrega (ISO string)" },
+        "createdAt": { "type": "number", "description": "Timestamp de criação" },
+        "createdBy": { "type": "string", "description": "UID do usuário que criou" }
+      },
+      "required": ["routeNumber", "deliveryLocation", "uf", "region", "clientName", "orderNumber", "invoiceNumber", "deliveryDate", "createdAt", "createdBy"]
+    }
+  },
+  "firestore": {
+    "/routes/{routeId}": {
+      "schema": "Route",
+      "description": "Coleção de rotas logísticas"
+    }
+  }
+}
