@@ -903,6 +903,23 @@ function RouteTable({ routes, user, onEdit, onDelete, onRelease }: RouteTablePro
 }
 
 function LoadingPanel({ cards, stats }: { cards: LoadingCard[], stats: any }) {
+  const [filterDate, setFilterDate] = useState<string>('');
+
+  const filteredCards = cards.filter(card => {
+    if (!filterDate) return true;
+    
+    // card.dataSep usually comes as YYYY-MM-DD or DD/MM/YYYY depending on GAS
+    // Let's handle both just in case, but usually input type="date" gives YYYY-MM-DD
+    if (card.dataSep === filterDate) return true;
+    
+    // If GAS sends DD/MM/YYYY, convert filterDate (YYYY-MM-DD) to DD/MM/YYYY to compare
+    const [year, month, day] = filterDate.split('-');
+    const formattedFilter = `${day}/${month}/${year}`;
+    if (card.dataSep === formattedFilter) return true;
+
+    return false;
+  });
+
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'Pendente': return 'bg-slate-500';
@@ -916,43 +933,69 @@ function LoadingPanel({ cards, stats }: { cards: LoadingCard[], stats: any }) {
 
   return (
     <div className="flex-1 flex flex-col gap-5 overflow-hidden">
+      {/* Filters */}
+      <div className="flex items-center justify-between bg-white p-3 rounded-lg border border-border shadow-sm">
+        <div className="flex items-center gap-2">
+          <Filter className="w-4 h-4 text-muted-foreground" />
+          <span className="text-[13px] font-bold text-slate-700">FILTRAR POR DATA:</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <div className="relative">
+            <input
+              type="date"
+              className="h-9 w-[140px] px-3 py-1 text-[13px] border border-input rounded-md bg-transparent shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+              value={filterDate}
+              onChange={(e) => setFilterDate(e.target.value)}
+            />
+            {filterDate && (
+              <button 
+                onClick={() => setFilterDate('')}
+                className="absolute right-8 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+              >
+                <Trash2 className="w-3 h-3" />
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+
       {/* Loading Stats */}
       <section className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3">
         <Card className="p-3 text-center border-b-4 border-slate-600">
           <p className="text-[10px] font-bold text-muted-foreground uppercase">Total</p>
-          <p className="text-xl font-bold">{cards.length}</p>
+          <p className="text-xl font-bold">{filteredCards.length}</p>
         </Card>
         <Card className="p-3 text-center border-b-4 border-red-600 bg-red-50">
           <p className="text-[10px] font-bold text-red-600 uppercase">Acumuladas</p>
-          <p className="text-xl font-bold text-red-600">{cards.filter(c => c.isAcumulado).length}</p>
+          <p className="text-xl font-bold text-red-600">{filteredCards.filter(c => c.isAcumulado).length}</p>
         </Card>
         <Card className="p-3 text-center border-b-4 border-slate-400">
           <p className="text-[10px] font-bold text-muted-foreground uppercase">Pendente</p>
-          <p className="text-xl font-bold">{cards.filter(c => c.status === 'Pendente').length}</p>
+          <p className="text-xl font-bold">{filteredCards.filter(c => c.status === 'Pendente').length}</p>
         </Card>
         <Card className="p-3 text-center border-b-4 border-orange-500">
           <p className="text-[10px] font-bold text-orange-600 uppercase">Separando</p>
-          <p className="text-xl font-bold">{cards.filter(c => c.status === 'Separando').length}</p>
+          <p className="text-xl font-bold">{filteredCards.filter(c => c.status === 'Separando').length}</p>
         </Card>
         <Card className="p-3 text-center border-b-4 border-purple-600">
           <p className="text-[10px] font-bold text-purple-600 uppercase">Separados</p>
-          <p className="text-xl font-bold">{cards.filter(c => c.status === 'Separado').length}</p>
+          <p className="text-xl font-bold">{filteredCards.filter(c => c.status === 'Separado').length}</p>
         </Card>
         <Card className="p-3 text-center border-b-4 border-red-500">
           <p className="text-[10px] font-bold text-red-600 uppercase">Carregando</p>
-          <p className="text-xl font-bold">{cards.filter(c => c.status === 'Carregando').length}</p>
+          <p className="text-xl font-bold">{filteredCards.filter(c => c.status === 'Carregando').length}</p>
         </Card>
         <Card className="p-3 text-center border-b-4 border-green-600">
           <p className="text-[10px] font-bold text-green-600 uppercase">Embarcados</p>
-          <p className="text-xl font-bold">{cards.filter(c => c.status === 'Embarcado').length}</p>
+          <p className="text-xl font-bold">{filteredCards.filter(c => c.status === 'Embarcado').length}</p>
         </Card>
       </section>
 
       {/* Cards Grid */}
       <div className="flex-1 overflow-auto">
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 pb-6">
-          {cards.length > 0 ? (
-            cards.map((card) => (
+          {filteredCards.length > 0 ? (
+            filteredCards.map((card) => (
               <Card key={card.id} className="overflow-hidden border-l-4 border-slate-200 shadow-sm flex flex-col" style={{ borderLeftColor: getStatusColor(card.status).split(' ')[0] }}>
                 <CardHeader className="p-4 pb-2 relative">
                   <div className="absolute top-4 right-4">
