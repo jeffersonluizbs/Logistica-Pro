@@ -10,8 +10,8 @@ import {
   serverTimestamp,
   Timestamp
 } from 'firebase/firestore';
-import { db, auth } from '@/firebase';
-import { Route, RouteFormData } from '@/types';
+import { db, auth } from '../firebase';
+import { Route, RouteFormData } from '../types';
 
 const COLLECTION_NAME = 'routes';
 
