@@ -248,7 +248,7 @@ export default function App() {
   });
 
   const routesNova = filteredRoutes.filter(r => r.type === 'nova');
-  const routesAntiga = filteredRoutes.filter(r => r.type === 'antiga');
+  const routesAntiga = filteredRoutes.filter(r => r.type !== 'nova');
 
   const getCargoStats = (routeList: Route[]) => {
     return {
@@ -275,9 +275,9 @@ export default function App() {
       loading: calculateLoadingPercentage(routes.filter(r => r.type === 'nova')),
     },
     antiga: {
-      count: routes.filter(r => r.type === 'antiga').length,
-      cargo: getCargoStats(routes.filter(r => r.type === 'antiga')),
-      loading: calculateLoadingPercentage(routes.filter(r => r.type === 'antiga')),
+      count: routes.filter(r => r.type !== 'nova').length,
+      cargo: getCargoStats(routes.filter(r => r.type !== 'nova')),
+      loading: calculateLoadingPercentage(routes.filter(r => r.type !== 'nova')),
     }
   };
 
@@ -627,6 +627,20 @@ export default function App() {
             </div>
             
             <div className="flex items-center gap-4">
+              {(searchTerm || filterDate || filterUf !== 'all') && (
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  onClick={() => {
+                    setSearchTerm('');
+                    setFilterDate('');
+                    setFilterUf('all');
+                  }}
+                  className="h-8 text-[11px] font-bold text-destructive hover:text-destructive hover:bg-destructive/10"
+                >
+                  LIMPAR FILTROS
+                </Button>
+              )}
               <div className="flex items-center gap-2">
                 <Label className="text-[11px] font-bold uppercase text-muted-foreground whitespace-nowrap">Data:</Label>
                 <Input 
