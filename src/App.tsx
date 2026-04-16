@@ -132,7 +132,7 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    if (user && activeTab === 'carregamento') {
+    if (user) {
       const fetchLoadingData = async () => {
         const data = await loadingService.getLoadingData();
         if (data) {
@@ -144,7 +144,7 @@ export default function App() {
       const interval = setInterval(fetchLoadingData, 10000);
       return () => clearInterval(interval);
     }
-  }, [user, activeTab]);
+  }, [user]);
 
   useEffect(() => {
     if (user) {
@@ -299,32 +299,53 @@ export default function App() {
   const routesNova = filteredRoutes.filter(r => r.type === 'nova');
   const routesAntiga = filteredRoutes.filter(r => r.type !== 'nova');
 
+  const isRouteLoaded = (route: Route) => {
+    return loadingCards.some(c => c.nRotaLog === route.routeNumber && c.status === 'Embarcado');
+  };
+
   const getCargoStats = (routeList: Route[]) => {
+    const plastico = routeList.filter(r => r.cargoType === 'plastico');
+    const porcelana = routeList.filter(r => r.cargoType === 'porcelana');
+    const consolidado = routeList.filter(r => r.cargoType === 'consolidado');
+
     return {
-      plastico: routeList.filter(r => r.cargoType === 'plastico').length,
-      porcelana: routeList.filter(r => r.cargoType === 'porcelana').length,
-      consolidado: routeList.filter(r => r.cargoType === 'consolidado').length,
+      plastico: {
+        total: plastico.length,
+        carregada: plastico.filter(isRouteLoaded).length,
+        pendente: plastico.filter(r => !isRouteLoaded(r)).length,
+      },
+      porcelana: {
+        total: porcelana.length,
+        carregada: porcelana.filter(isRouteLoaded).length,
+        pendente: porcelana.filter(r => !isRouteLoaded(r)).length,
+      },
+      consolidado: {
+        total: consolidado.length,
+        carregada: consolidado.filter(isRouteLoaded).length,
+        pendente: consolidado.filter(r => !isRouteLoaded(r)).length,
+      },
     };
   };
 
   const calculateLoadingPercentage = (routeList: Route[]) => {
     if (routeList.length === 0) return 0;
-    const totalDeliveries = routeList.reduce((acc, r) => acc + r.deliveries.length, 0);
-    const loadedDeliveries = routeList.reduce((acc, r) => 
-      acc + r.deliveries.filter(d => d.status === 'carregado').length, 0
-    );
-    return Math.round((loadedDeliveries / totalDeliveries) * 100) || 0;
+    const loadedRoutes = routeList.filter(isRouteLoaded).length;
+    return Math.round((loadedRoutes / routeList.length) * 100) || 0;
   };
 
   const stats = {
     total: routes.length,
     nova: {
       count: routes.filter(r => r.type === 'nova').length,
+      pendente: routes.filter(r => r.type === 'nova' && !isRouteLoaded(r)).length,
+      carregada: routes.filter(r => r.type === 'nova' && isRouteLoaded(r)).length,
       cargo: getCargoStats(routes.filter(r => r.type === 'nova')),
       loading: calculateLoadingPercentage(routes.filter(r => r.type === 'nova')),
     },
     antiga: {
       count: routes.filter(r => r.type !== 'nova').length,
+      pendente: routes.filter(r => r.type !== 'nova' && !isRouteLoaded(r)).length,
+      carregada: routes.filter(r => r.type !== 'nova' && isRouteLoaded(r)).length,
       cargo: getCargoStats(routes.filter(r => r.type !== 'nova')),
       loading: calculateLoadingPercentage(routes.filter(r => r.type !== 'nova')),
     }
@@ -615,7 +636,7 @@ export default function App() {
         {activeTab === 'logistica' ? (
           <>
             {/* Stats Bar */}
-            <section className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <section className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
               <Card className="p-4 bg-white border-border shadow-sm flex flex-col justify-between">
                 <div>
                   <p className="text-[11px] font-bold uppercase text-muted-foreground mb-1">Total Geral</p>
@@ -627,26 +648,51 @@ export default function App() {
                 </div>
               </Card>
 
+              <Card 
+                className="p-4 bg-white border-border shadow-sm flex flex-col justify-between cursor-pointer hover:bg-slate-50 transition-colors"
+                onClick={() => {
+                  setActiveTab('carregamento');
+                }}
+              >
+                <div>
+                  <p className="text-[11px] font-bold uppercase text-green-600 mb-1">Rotas Liberadas Hoje</p>
+                  <p className="text-[24px] font-bold text-slate-900">
+                    {loadingCards.filter(c => {
+                      const todayISO = new Date().toISOString().split('T')[0];
+                      const [year, month, day] = todayISO.split('-');
+                      const todayBR = `${day}/${month}/${year}`;
+                      return c.dataSep === todayISO || c.dataSep === todayBR;
+                    }).length}
+                  </p>
+                </div>
+                <div className="mt-4 pt-4 border-t border-slate-100 flex justify-between text-[11px]">
+                  <span className="text-muted-foreground font-bold">Clique para ver o painel</span>
+                </div>
+              </Card>
+
               <Card className="p-4 bg-white border-border shadow-sm">
                 <div className="flex justify-between items-start mb-3">
                   <div>
                     <p className="text-[11px] font-bold uppercase text-blue-600">Status Carregamento (Novas)</p>
-                    <p className="text-[20px] font-bold text-slate-900">{stats.nova.loading}%</p>
+                    <div className="flex items-baseline gap-2">
+                      <p className="text-[20px] font-bold text-slate-900">{stats.nova.loading}%</p>
+                      <span className="text-[10px] font-bold text-muted-foreground">({stats.nova.carregada} de {stats.nova.count})</span>
+                    </div>
                   </div>
                   <Badge className="bg-blue-50 text-blue-600 border-blue-100 hover:bg-blue-50">NOVAS</Badge>
                 </div>
-                <div className="grid grid-cols-3 gap-2 text-[10px] font-bold uppercase">
+                <div className="grid grid-cols-3 gap-2 text-[9px] font-bold uppercase">
                   <div className="flex flex-col">
                     <span className="text-muted-foreground">Plástico</span>
-                    <span className="text-slate-900">{stats.nova.cargo.plastico}</span>
+                    <span className="text-slate-600">{stats.nova.cargo.plastico.pendente} Pend / <span className="text-green-600">{stats.nova.cargo.plastico.carregada} Carr</span></span>
                   </div>
                   <div className="flex flex-col">
                     <span className="text-muted-foreground">Porcelana</span>
-                    <span className="text-slate-900">{stats.nova.cargo.porcelana}</span>
+                    <span className="text-slate-600">{stats.nova.cargo.porcelana.pendente} Pend / <span className="text-green-600">{stats.nova.cargo.porcelana.carregada} Carr</span></span>
                   </div>
                   <div className="flex flex-col">
                     <span className="text-muted-foreground">Consol.</span>
-                    <span className="text-slate-900">{stats.nova.cargo.consolidado}</span>
+                    <span className="text-slate-600">{stats.nova.cargo.consolidado.pendente} Pend / <span className="text-green-600">{stats.nova.cargo.consolidado.carregada} Carr</span></span>
                   </div>
                 </div>
               </Card>
@@ -655,22 +701,25 @@ export default function App() {
                 <div className="flex justify-between items-start mb-3">
                   <div>
                     <p className="text-[11px] font-bold uppercase text-orange-600">Status Carregamento (Antigas)</p>
-                    <p className="text-[20px] font-bold text-slate-900">{stats.antiga.loading}%</p>
+                    <div className="flex items-baseline gap-2">
+                      <p className="text-[20px] font-bold text-slate-900">{stats.antiga.loading}%</p>
+                      <span className="text-[10px] font-bold text-muted-foreground">({stats.antiga.carregada} de {stats.antiga.count})</span>
+                    </div>
                   </div>
                   <Badge className="bg-orange-50 text-orange-600 border-orange-100 hover:bg-orange-50">ANTIGAS</Badge>
                 </div>
-                <div className="grid grid-cols-3 gap-2 text-[10px] font-bold uppercase">
+                <div className="grid grid-cols-3 gap-2 text-[9px] font-bold uppercase">
                   <div className="flex flex-col">
                     <span className="text-muted-foreground">Plástico</span>
-                    <span className="text-slate-900">{stats.antiga.cargo.plastico}</span>
+                    <span className="text-slate-600">{stats.antiga.cargo.plastico.pendente} Pend / <span className="text-green-600">{stats.antiga.cargo.plastico.carregada} Carr</span></span>
                   </div>
                   <div className="flex flex-col">
                     <span className="text-muted-foreground">Porcelana</span>
-                    <span className="text-slate-900">{stats.antiga.cargo.porcelana}</span>
+                    <span className="text-slate-600">{stats.antiga.cargo.porcelana.pendente} Pend / <span className="text-green-600">{stats.antiga.cargo.porcelana.carregada} Carr</span></span>
                   </div>
                   <div className="flex flex-col">
                     <span className="text-muted-foreground">Consol.</span>
-                    <span className="text-slate-900">{stats.antiga.cargo.consolidado}</span>
+                    <span className="text-slate-600">{stats.antiga.cargo.consolidado.pendente} Pend / <span className="text-green-600">{stats.antiga.cargo.consolidado.carregada} Carr</span></span>
                   </div>
                 </div>
               </Card>
@@ -966,7 +1015,7 @@ function RouteTable({ routes, user, loadingCards, onEdit, onDelete, onRelease }:
 }
 
 function LoadingPanel({ cards, stats, localRoutes }: { cards: LoadingCard[], stats: any, localRoutes: Route[] }) {
-  const [filterDate, setFilterDate] = useState<string>('');
+  const [filterDate, setFilterDate] = useState<string>(new Date().toISOString().split('T')[0]);
 
   const filteredCards = cards.filter(card => {
     if (!filterDate) return true;
