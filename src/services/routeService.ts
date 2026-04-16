@@ -47,7 +47,7 @@ export const routeService = {
     await deleteDoc(doc(db, COLLECTION_NAME, id));
   },
 
-  updateRoute: async (id: string, formData: RouteFormData): Promise<void> => {
+  updateRoute: async (id: string, formData: Partial<RouteFormData> | RouteFormData): Promise<void> => {
     const routeRef = doc(db, COLLECTION_NAME, id);
     await updateDoc(routeRef, {
       ...formData
@@ -57,7 +57,15 @@ export const routeService = {
   releaseRoute: async (id: string): Promise<void> => {
     const routeRef = doc(db, COLLECTION_NAME, id);
     await updateDoc(routeRef, {
-      releasedToLoading: true
+      releasedToLoading: true,
+      statusOverride: null
+    });
+  },
+
+  revertStatus: async (id: string, status: string | null): Promise<void> => {
+    const routeRef = doc(db, COLLECTION_NAME, id);
+    await updateDoc(routeRef, {
+      statusOverride: status
     });
   }
 };

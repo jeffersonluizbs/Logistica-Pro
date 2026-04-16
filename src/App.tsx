@@ -301,9 +301,20 @@ export default function App() {
 
   const isRouteLoaded = (route: Route) => {
     if (!route.releasedToLoading) return false;
+    if (route.statusOverride === 'pendente') return false;
     const matchingCards = loadingCards.filter(c => c.nRotaLog === route.routeNumber);
     if (matchingCards.length === 0) return false;
     return matchingCards[matchingCards.length - 1].status === 'Embarcado';
+  };
+
+  const handleRevertEmbarcado = async (route: Route) => {
+    if (window.confirm("Deseja forçar o status desta rota para PENDENTE?\n(Isso ignorará o último 'Embarcado' e permitirá liberar a rota novamente se necessário)")) {
+      try {
+        await routeService.revertStatus(route.id, 'pendente');
+      } catch (error) {
+        console.error("Erro ao reverter status:", error);
+      }
+    }
   };
 
   const getCargoStats = (routeList: Route[]) => {
@@ -819,6 +830,7 @@ export default function App() {
                       onEdit={handleEdit} 
                       onDelete={handleDelete} 
                       onRelease={handleOpenReleaseDialog}
+                      onRevertEmbarcado={handleRevertEmbarcado}
                     />
                   </div>
 
@@ -835,6 +847,7 @@ export default function App() {
                       onEdit={handleEdit} 
                       onDelete={handleDelete} 
                       onRelease={handleOpenReleaseDialog}
+                      onRevertEmbarcado={handleRevertEmbarcado}
                     />
                   </div>
                 </div>
@@ -893,9 +906,10 @@ interface RouteTableProps {
   onEdit: (route: Route) => void;
   onDelete: (id: string, createdBy: string) => void;
   onRelease: (route: Route) => void;
+  onRevertEmbarcado: (route: Route) => void;
 }
 
-function RouteTable({ routes, user, isRouteLoaded, onEdit, onDelete, onRelease }: RouteTableProps) {
+function RouteTable({ routes, user, isRouteLoaded, onEdit, onDelete, onRelease, onRevertEmbarcado }: RouteTableProps) {
   const getCargoBadgeColor = (type: string) => {
     switch (type) {
       case 'plastico': return 'bg-emerald-100 text-emerald-700 border-emerald-200';
@@ -924,10 +938,19 @@ function RouteTable({ routes, user, isRouteLoaded, onEdit, onDelete, onRelease }
               onClick={() => onEdit(route)}
             >
               <TableCell className="font-bold py-2 px-3 text-primary">
-                <div className="flex flex-col gap-1">
+                <div className="flex flex-col gap-1 items-start">
                   <span>#{route.routeNumber}</span>
                   {isRouteLoaded(route) && (
-                    <Badge className="bg-green-600 text-white text-[9px] px-1 py-0 w-fit">EMBARCADO</Badge>
+                    <Badge 
+                      className="bg-green-600 text-white text-[9px] px-1 py-0 w-fit cursor-pointer hover:bg-green-700 transition-colors"
+                      title="Clique para retornar a status PENDENTE"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onRevertEmbarcado(route);
+                      }}
+                    >
+                      EMBARCADO
+                    </Badge>
                   )}
                 </div>
               </TableCell>

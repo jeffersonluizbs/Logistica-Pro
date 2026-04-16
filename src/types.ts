@@ -16,6 +16,7 @@ export interface Route {
   cargoType: 'plastico' | 'porcelana' | 'consolidado';
   deliveries: DeliveryDetail[];
   releasedToLoading?: boolean;
+  statusOverride?: 'pendente' | null;
   createdAt: number;
   createdBy: string;
 }
