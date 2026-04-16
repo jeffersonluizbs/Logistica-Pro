@@ -29,7 +29,7 @@ export interface LoadingCard {
 
 export const loadingService = {
   // Função para liberar a rota para o painel de carregamento (GAS)
-  releaseRoute: async (route: Route): Promise<boolean> => {
+  releaseRoute: async (route: Route, releaseDateStr: string): Promise<boolean> => {
     if (!GAS_WEB_APP_URL) {
       console.warn('URL do Apps Script não configurada.');
       return false;
@@ -54,7 +54,11 @@ export const loadingService = {
         .join(', ');
 
       params.append('rota', rotaFormatada);
-      params.append('dataSep', new Date().toLocaleDateString('pt-BR'));
+      
+      // Format releaseDateStr (YYYY-MM-DD) to DD/MM/YYYY
+      const [year, month, day] = releaseDateStr.split('-');
+      params.append('dataSep', `${day}/${month}/${year}`);
+
       params.append('qtd', route.deliveries.length.toString());
       params.append('nRotaLog', route.routeNumber);
 

@@ -119,6 +119,8 @@ export default function App() {
   const [activeTab, setActiveTab] = useState<'logistica' | 'carregamento'>('logistica');
   const [loadingCards, setLoadingCards] = useState<LoadingCard[]>([]);
   const [loadingStats, setLoadingStats] = useState<any>(null);
+  const [routeToRelease, setRouteToRelease] = useState<Route | null>(null);
+  const [releaseDate, setReleaseDate] = useState<string>(new Date().toISOString().split('T')[0]);
 
   useEffect(() => {
     const unsubscribeAuth = onAuthStateChanged(auth, (currentUser) => {
@@ -251,19 +253,26 @@ export default function App() {
     setEditingId(null);
   };
 
-  const handleReleaseRoute = async (route: Route) => {
-    if (window.confirm(`Deseja liberar a rota #${route.routeNumber} para o painel de carregamento?`)) {
-      try {
-        const success = await loadingService.releaseRoute(route);
-        if (success) {
-          await routeService.releaseRoute(route.id);
-          alert("Rota liberada com sucesso!");
-        } else {
-          alert("Erro ao liberar rota. Verifique a configuração do Apps Script.");
-        }
-      } catch (error) {
-        console.error("Erro ao liberar rota:", error);
+  const handleOpenReleaseDialog = (route: Route) => {
+    setRouteToRelease(route);
+    setReleaseDate(new Date().toISOString().split('T')[0]);
+  };
+
+  const confirmReleaseRoute = async () => {
+    if (!routeToRelease) return;
+    
+    try {
+      const success = await loadingService.releaseRoute(routeToRelease, releaseDate);
+      if (success) {
+        await routeService.releaseRoute(routeToRelease.id);
+        alert("Rota liberada com sucesso!");
+      } else {
+        alert("Erro ao liberar rota. Verifique a configuração do Apps Script.");
       }
+    } catch (error) {
+      console.error("Erro ao liberar rota:", error);
+    } finally {
+      setRouteToRelease(null);
     }
   };
 
@@ -756,7 +765,7 @@ export default function App() {
                       user={user} 
                       onEdit={handleEdit} 
                       onDelete={handleDelete} 
-                      onRelease={handleReleaseRoute}
+                      onRelease={handleOpenReleaseDialog}
                     />
                   </div>
 
@@ -771,7 +780,7 @@ export default function App() {
                       user={user} 
                       onEdit={handleEdit} 
                       onDelete={handleDelete} 
-                      onRelease={handleReleaseRoute}
+                      onRelease={handleOpenReleaseDialog}
                     />
                   </div>
                 </div>
@@ -782,6 +791,36 @@ export default function App() {
           <LoadingPanel cards={loadingCards} stats={loadingStats} localRoutes={routes} />
         )}
       </main>
+
+      {/* Release Dialog */}
+      <Dialog open={!!routeToRelease} onOpenChange={(open) => !open && setRouteToRelease(null)}>
+        <DialogContent className="sm:max-w-[400px]">
+          <DialogHeader>
+            <DialogTitle>Liberar Rota para Carregamento</DialogTitle>
+            <DialogDescription>
+              Deseja liberar a rota #{routeToRelease?.routeNumber} para que dia?
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-4">
+            <div className="flex flex-col gap-2">
+              <Label className="text-[12px] font-bold uppercase text-muted-foreground">Data de Separação/Carregamento</Label>
+              <Input 
+                type="date" 
+                value={releaseDate} 
+                onChange={(e) => setReleaseDate(e.target.value)} 
+                className="h-10"
+                required 
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setRouteToRelease(null)}>Cancelar</Button>
+            <Button onClick={confirmReleaseRoute} className="bg-blue-600 hover:bg-blue-700 text-white">
+              Liberar Rota
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Edit Dialog (Keep for functionality) */}
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
@@ -873,17 +912,15 @@ function RouteTable({ routes, user, onEdit, onDelete, onRelease }: RouteTablePro
                 <div className="flex justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                   {route.createdBy === user.uid && (
                     <>
-                      {!route.releasedToLoading && (
-                        <Button 
-                          variant="ghost" 
-                          size="icon" 
-                          className="h-7 w-7 text-blue-600 hover:text-blue-700 hover:bg-blue-50"
-                          onClick={() => onRelease(route)}
-                          title="Liberar para Carregamento"
-                        >
-                          <Send className="w-3.5 h-3.5" />
-                        </Button>
-                      )}
+                      <Button 
+                        variant="ghost" 
+                        size="icon" 
+                        className={`h-7 w-7 ${route.releasedToLoading ? 'text-green-600 hover:text-green-700 hover:bg-green-50' : 'text-blue-600 hover:text-blue-700 hover:bg-blue-50'}`}
+                        onClick={() => onRelease(route)}
+                        title={route.releasedToLoading ? "Liberar Novamente" : "Liberar para Carregamento"}
+                      >
+                        <Send className="w-3.5 h-3.5" />
+                      </Button>
                       <Button 
                         variant="ghost" 
                         size="icon" 
