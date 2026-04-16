@@ -60,6 +60,7 @@ export const loadingService = {
       params.append('dataSep', `${day}/${month}/${year}`);
 
       params.append('qtd', route.deliveries.length.toString());
+      params.append('nRota', route.routeNumber);
       params.append('nRotaLog', route.routeNumber);
 
       await fetch(GAS_WEB_APP_URL, {

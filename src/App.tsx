@@ -763,6 +763,7 @@ export default function App() {
                     <RouteTable 
                       routes={routesNova} 
                       user={user} 
+                      loadingCards={loadingCards}
                       onEdit={handleEdit} 
                       onDelete={handleDelete} 
                       onRelease={handleOpenReleaseDialog}
@@ -778,6 +779,7 @@ export default function App() {
                     <RouteTable 
                       routes={routesAntiga} 
                       user={user} 
+                      loadingCards={loadingCards}
                       onEdit={handleEdit} 
                       onDelete={handleDelete} 
                       onRelease={handleOpenReleaseDialog}
@@ -835,12 +837,13 @@ export default function App() {
 interface RouteTableProps {
   routes: Route[];
   user: User;
+  loadingCards: LoadingCard[];
   onEdit: (route: Route) => void;
   onDelete: (id: string, createdBy: string) => void;
   onRelease: (route: Route) => void;
 }
 
-function RouteTable({ routes, user, onEdit, onDelete, onRelease }: RouteTableProps) {
+function RouteTable({ routes, user, loadingCards, onEdit, onDelete, onRelease }: RouteTableProps) {
   const getCargoBadgeColor = (type: string) => {
     switch (type) {
       case 'plastico': return 'bg-emerald-100 text-emerald-700 border-emerald-200';
@@ -868,7 +871,14 @@ function RouteTable({ routes, user, onEdit, onDelete, onRelease }: RouteTablePro
               className="hover:bg-slate-50/80 group border-b border-border cursor-pointer transition-colors"
               onClick={() => onEdit(route)}
             >
-              <TableCell className="font-bold py-2 px-3 text-primary">#{route.routeNumber}</TableCell>
+              <TableCell className="font-bold py-2 px-3 text-primary">
+                <div className="flex flex-col gap-1">
+                  <span>#{route.routeNumber}</span>
+                  {loadingCards.some(c => c.nRotaLog === route.routeNumber && c.status === 'Embarcado') && (
+                    <Badge className="bg-green-600 text-white text-[9px] px-1 py-0 w-fit">EMBARCADO</Badge>
+                  )}
+                </div>
+              </TableCell>
               <TableCell className="py-2 px-3">
                 <Badge variant="outline" className={`text-[10px] font-bold uppercase px-1.5 py-0 ${getCargoBadgeColor(route.cargoType)}`}>
                   {route.cargoType}
