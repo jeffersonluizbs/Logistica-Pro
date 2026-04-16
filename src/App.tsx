@@ -602,6 +602,16 @@ export default function App() {
 
       {/* Main Content */}
       <main className="flex-1 flex flex-col p-6 gap-5 overflow-hidden relative">
+        {/* Animated Background Truck */}
+        <div className="absolute top-0 left-0 right-0 h-10 overflow-hidden pointer-events-none z-0 opacity-20 text-slate-400">
+          <div className="animate-drive-truck pt-4 flex items-center gap-1.5 w-max">
+            <Truck className="w-5 h-5" />
+            <span className="font-bold text-[10px] tracking-widest whitespace-nowrap">TRAMONTINA LOGÍSTICA</span>
+            <div className="w-2 h-[2px] bg-slate-300 ml-1 rounded-full opacity-50" />
+            <div className="w-1 h-[2px] bg-slate-300 ml-0.5 rounded-full opacity-50" />
+          </div>
+        </div>
+
         {/* Mobile Header */}
         <div className="lg:hidden flex items-center justify-between mb-2">
           <Button variant="outline" size="icon" onClick={() => setIsSidebarOpen(true)}>
