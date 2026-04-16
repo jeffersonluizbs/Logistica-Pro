@@ -779,7 +779,7 @@ export default function App() {
             </section>
           </>
         ) : (
-          <LoadingPanel cards={loadingCards} stats={loadingStats} />
+          <LoadingPanel cards={loadingCards} stats={loadingStats} localRoutes={routes} />
         )}
       </main>
 
@@ -837,15 +837,27 @@ function RouteTable({ routes, user, onEdit, onDelete, onRelease }: RouteTablePro
                 </Badge>
               </TableCell>
               <TableCell className="py-2 px-3">
-                <div className="flex flex-wrap gap-1">
+                <div className="flex flex-col gap-1">
                   {route.deliveries.map((d, i) => (
-                    <div key={i} className="flex items-center gap-1 bg-white px-2 py-0.5 rounded text-[11px] border border-slate-200 shadow-sm">
-                      <div className={`w-1.5 h-1.5 rounded-full ${d.status === 'carregado' ? 'bg-green-500' : 'bg-slate-300'}`} />
-                      <span className="font-bold text-primary">{d.uf}</span>
-                      <span className="text-muted-foreground">|</span>
-                      <span className="truncate max-w-[150px]" title={`${d.clientName} - ${d.location}`}>
-                        {d.clientName}
-                      </span>
+                    <div key={i} className="flex flex-col bg-white px-2 py-1 rounded text-[11px] border border-slate-200 shadow-sm">
+                      <div className="flex items-center gap-1">
+                        <div className={`w-1.5 h-1.5 rounded-full ${d.status === 'carregado' ? 'bg-green-500' : 'bg-slate-300'}`} />
+                        <span className="font-bold text-slate-700">{d.location}</span>
+                        <span className="text-muted-foreground">-</span>
+                        <span className="font-bold text-primary">{d.uf}</span>
+                        <span className="text-muted-foreground">({d.region})</span>
+                        <span className="text-muted-foreground">|</span>
+                        <span className="truncate max-w-[150px] font-medium" title={d.clientName}>
+                          {d.clientName}
+                        </span>
+                      </div>
+                      {(d.orderNumber || d.invoiceNumber) && (
+                        <div className="flex items-center gap-2 pl-2.5 mt-0.5 text-[10px] text-slate-500">
+                          {d.orderNumber && <span><span className="font-medium">Ped:</span> {d.orderNumber}</span>}
+                          {d.orderNumber && d.invoiceNumber && <span className="text-slate-300">•</span>}
+                          {d.invoiceNumber && <span><span className="font-medium">NF:</span> {d.invoiceNumber}</span>}
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -902,7 +914,7 @@ function RouteTable({ routes, user, onEdit, onDelete, onRelease }: RouteTablePro
   );
 }
 
-function LoadingPanel({ cards, stats }: { cards: LoadingCard[], stats: any }) {
+function LoadingPanel({ cards, stats, localRoutes }: { cards: LoadingCard[], stats: any, localRoutes: Route[] }) {
   const [filterDate, setFilterDate] = useState<string>('');
 
   const filteredCards = cards.filter(card => {
@@ -995,7 +1007,10 @@ function LoadingPanel({ cards, stats }: { cards: LoadingCard[], stats: any }) {
       <div className="flex-1 overflow-auto">
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 pb-6">
           {filteredCards.length > 0 ? (
-            filteredCards.map((card) => (
+            filteredCards.map((card) => {
+              const localRoute = localRoutes.find(r => r.routeNumber === card.nRotaLog);
+              
+              return (
               <Card key={card.id} className="overflow-hidden border-l-4 border-slate-200 shadow-sm flex flex-col" style={{ borderLeftColor: getStatusColor(card.status).split(' ')[0] }}>
                 <CardHeader className="p-4 pb-2 relative">
                   <div className="absolute top-4 right-4">
@@ -1054,9 +1069,27 @@ function LoadingPanel({ cards, stats }: { cards: LoadingCard[], stats: any }) {
                       EMBARQUE CONCLUÍDO
                     </div>
                   )}
+
+                  {localRoute && localRoute.deliveries.some(d => d.orderNumber || d.invoiceNumber) && (
+                    <div className="mt-2 pt-3 border-t border-slate-200">
+                      <p className="text-[10px] font-bold text-muted-foreground uppercase mb-2">Pedidos e Notas (Local)</p>
+                      <div className="space-y-1.5">
+                        {localRoute.deliveries.filter(d => d.orderNumber || d.invoiceNumber).map((d, i) => (
+                          <div key={i} className="bg-slate-50 p-2 rounded border border-slate-100 text-[11px]">
+                            <p className="font-bold text-slate-700 mb-0.5 truncate" title={d.clientName}>{d.clientName}</p>
+                            <div className="flex items-center gap-2 text-slate-600">
+                              {d.orderNumber && <span><span className="font-medium">Ped:</span> {d.orderNumber}</span>}
+                              {d.orderNumber && d.invoiceNumber && <span className="text-slate-300">•</span>}
+                              {d.invoiceNumber && <span><span className="font-medium">NF:</span> {d.invoiceNumber}</span>}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </CardContent>
               </Card>
-            ))
+            )})
           ) : (
             <div className="col-span-full h-40 flex flex-center justify-center items-center text-muted-foreground italic">
               Nenhum card de carregamento encontrado.

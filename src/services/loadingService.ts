@@ -40,7 +40,20 @@ export const loadingService = {
       // consiga ler os dados diretamente em e.parameter
       const params = new URLSearchParams();
       params.append('action', 'salvarNovoCard');
-      params.append('rota', route.deliveries.map(d => d.clientName).join(', '));
+      
+      // Contar entregas por local e formatar como "Local Xent"
+      const locationCounts = route.deliveries.reduce((acc, d) => {
+        if (d.location) {
+          acc[d.location] = (acc[d.location] || 0) + 1;
+        }
+        return acc;
+      }, {} as Record<string, number>);
+
+      const rotaFormatada = Object.entries(locationCounts)
+        .map(([location, count]) => `${location} ${count}ent`)
+        .join(', ');
+
+      params.append('rota', rotaFormatada);
       params.append('dataSep', new Date().toLocaleDateString('pt-BR'));
       params.append('qtd', route.deliveries.length.toString());
       params.append('nRotaLog', route.routeNumber);
