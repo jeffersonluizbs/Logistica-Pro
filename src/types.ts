@@ -14,6 +14,7 @@ export interface Route {
   routeNumber: string;
   type: 'nova' | 'antiga';
   cargoType: 'plastico' | 'porcelana' | 'consolidado';
+  vehicleType?: 'Carreta' | 'Truck' | '3/4' | 'Container' | '';
   deliveries: DeliveryDetail[];
   releasedToLoading?: boolean;
   statusOverride?: 'pendente' | null;

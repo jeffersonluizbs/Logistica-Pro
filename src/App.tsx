@@ -79,6 +79,7 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { routeService } from '@/services/routeService';
 import { loadingService, LoadingCard } from '@/services/loadingService';
+import { nfService } from '@/services/nfService';
 import { Route, RouteFormData, DeliveryDetail } from '@/types';
 import { auth } from '@/firebase';
 
@@ -97,6 +98,7 @@ const INITIAL_FORM_DATA: RouteFormData = {
   routeNumber: '',
   type: 'nova',
   cargoType: 'consolidado',
+  vehicleType: '',
   deliveries: [{ ...INITIAL_DELIVERY }],
 };
 
@@ -114,6 +116,7 @@ export default function App() {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterUf, setFilterUf] = useState<string>('all');
   const [filterDate, setFilterDate] = useState<string>('');
+  const [filterMonth, setFilterMonth] = useState<string>(new Date().toISOString().slice(0, 7));
   const [loading, setLoading] = useState(true);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<'logistica' | 'carregamento'>('logistica');
@@ -227,6 +230,7 @@ export default function App() {
       routeNumber: route.routeNumber,
       type: route.type,
       cargoType: route.cargoType || 'consolidado',
+      vehicleType: route.vehicleType || '',
       deliveries: route.deliveries,
     });
     setEditingId(route.id);
@@ -277,6 +281,10 @@ export default function App() {
   };
 
   const filteredRoutes = routes.filter(route => {
+    // Current month filter 
+    const routeMonth = new Date(route.createdAt).toISOString().slice(0, 7);
+    if (routeMonth !== filterMonth) return false;
+
     const searchLower = searchTerm.toLowerCase();
     
     const matchesSearch = 
@@ -299,13 +307,17 @@ export default function App() {
   const routesNova = filteredRoutes.filter(r => r.type === 'nova');
   const routesAntiga = filteredRoutes.filter(r => r.type !== 'nova');
 
-  const isRouteLoaded = (route: Route) => {
-    if (!route.releasedToLoading) return false;
-    if (route.statusOverride === 'pendente') return false;
+  const getRouteLoadingStatus = (route: Route): string | null => {
+    if (!route.releasedToLoading) return null;
+    if (route.statusOverride === 'pendente') return null;
+    
     const matchingCards = loadingCards.filter(c => c.nRotaLog === route.routeNumber);
-    if (matchingCards.length === 0) return false;
-    return matchingCards[matchingCards.length - 1].status === 'Embarcado';
+    if (matchingCards.length === 0) return null;
+    
+    return matchingCards[matchingCards.length - 1].status;
   };
+
+  const isRouteLoaded = (route: Route) => getRouteLoadingStatus(route) === 'Embarcado';
 
   const handleRevertEmbarcado = async (route: Route) => {
     if (window.confirm("Deseja forçar o status desta rota para PENDENTE?\n(Isso ignorará o último 'Embarcado' e permitirá liberar a rota novamente se necessário)")) {
@@ -362,6 +374,12 @@ export default function App() {
       carregada: routes.filter(r => r.type !== 'nova' && isRouteLoaded(r)).length,
       cargo: getCargoStats(routes.filter(r => r.type !== 'nova')),
       loading: calculateLoadingPercentage(routes.filter(r => r.type !== 'nova')),
+    },
+    vehicle: {
+      carreta: routes.filter(r => r.vehicleType === 'Carreta').length,
+      truck: routes.filter(r => r.vehicleType === 'Truck').length,
+      tresquartos: routes.filter(r => r.vehicleType === '3/4').length,
+      container: routes.filter(r => r.vehicleType === 'Container').length,
     }
   };
 
@@ -462,7 +480,7 @@ export default function App() {
             </div>
           </div>
 
-          <div className="grid grid-cols-1 gap-2">
+          <div className="grid grid-cols-2 gap-2">
             <div className="flex flex-col gap-1">
               <Label className="text-[11px] font-bold uppercase text-muted-foreground">Carga</Label>
               <Select value={formData.cargoType} onValueChange={(value: 'plastico' | 'porcelana' | 'consolidado') => setFormData(prev => ({ ...prev, cargoType: value }))}>
@@ -473,6 +491,20 @@ export default function App() {
                   <SelectItem value="plastico">Plástico</SelectItem>
                   <SelectItem value="porcelana">Porcelana</SelectItem>
                   <SelectItem value="consolidado">Consolidado</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex flex-col gap-1">
+              <Label className="text-[11px] font-bold uppercase text-muted-foreground">Veículo</Label>
+              <Select value={formData.vehicleType || ''} onValueChange={(value: any) => setFormData(prev => ({ ...prev, vehicleType: value }))}>
+                <SelectTrigger className="h-9 text-[13px]">
+                  <SelectValue placeholder="Selecione" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="Carreta">Carreta</SelectItem>
+                  <SelectItem value="Truck">Truck</SelectItem>
+                  <SelectItem value="3/4">3/4</SelectItem>
+                  <SelectItem value="Container">Container</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -578,7 +610,7 @@ export default function App() {
                       onChange={(e) => handleDeliveryChange(index, 'invoiceNumber', e.target.value)} 
                       placeholder="#000" 
                       className="h-8 text-[12px]"
-                      required 
+                      
                     />
                   </div>
                 </div>
@@ -598,6 +630,63 @@ export default function App() {
               </div>
             ))}
           </div>
+
+          <Button 
+            type="button" 
+            variant="secondary"
+            onClick={async () => {
+              let url = localStorage.getItem('NF_GAS_URL');
+              if (!url) {
+                const input = window.prompt("Insira a URL Web App do Google Apps Script para sincronização de Notas Fiscais:");
+                if (input) {
+                  localStorage.setItem('NF_GAS_URL', input.trim());
+                  url = input.trim();
+                } else {
+                  return;
+                }
+              }
+
+              // Extract relevant orders
+              const extractOrders = (text: string) => text.match(/\b\d+-\d+\b/g) || [];
+              const ordersToFetch = new Set<string>();
+
+              formData.deliveries.forEach(d => {
+                if (d.orderNumber && !d.invoiceNumber) {
+                  extractOrders(d.orderNumber).forEach(o => ordersToFetch.add(o));
+                }
+              });
+
+              if (ordersToFetch.size === 0) {
+                alert("Nenhum pedido pendente de NF encontrado nesta rota para sincronizar.");
+                return;
+              }
+
+              const allOrders = Array.from(ordersToFetch);
+              const mapping = await nfService.fetchNFs(allOrders, url);
+              
+              const normalize = (o: string) => {
+                const [ped, dig] = o.split('-');
+                if (!dig) return o;
+                return `${ped}-${parseInt(dig, 10)}`;
+              }
+
+              const newDeliveries = formData.deliveries.map(d => {
+                if (!d.orderNumber) return d;
+                const orders = extractOrders(d.orderNumber);
+                const nfs = orders.map(o => mapping[o] || mapping[normalize(o)]).filter(Boolean);
+                if (nfs.length > 0) {
+                   return { ...d, invoiceNumber: nfs.join(' / ') };
+                }
+                return d;
+              });
+
+              setFormData(prev => ({ ...prev, deliveries: newDeliveries }));
+              alert("Sincronização concluída! Revise as notas fiscais preenchidas no formulário.");
+            }} 
+            className="w-full h-9 text-[12px] bg-blue-50 text-blue-700 hover:bg-blue-100 font-bold border border-blue-200"
+          >
+            Sincronizar NFs do formulário
+          </Button>
 
           <Button type="submit" className="w-full h-10 font-bold text-[13px] mt-4">
             {editingId ? 'Salvar Alterações' : 'Finalizar Rota'}
@@ -625,26 +714,53 @@ export default function App() {
           <div className="w-10" />
         </div>
 
-        {/* Tabs */}
-        <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-lg w-fit mb-2">
-          <Button 
-            variant={activeTab === 'logistica' ? 'default' : 'ghost'} 
-            size="sm" 
-            onClick={() => setActiveTab('logistica')}
-            className="h-8 px-4 text-[12px] font-bold gap-2"
-          >
-            <LayoutDashboard className="w-4 h-4" />
-            LOGÍSTICA
-          </Button>
-          <Button 
-            variant={activeTab === 'carregamento' ? 'default' : 'ghost'} 
-            size="sm" 
-            onClick={() => setActiveTab('carregamento')}
-            className="h-8 px-4 text-[12px] font-bold gap-2"
-          >
-            <Truck className="w-4 h-4" />
-            CARREGAMENTO
-          </Button>
+        {/* Header Area with Tabs and Month Selector */}
+        <div className="flex items-center justify-between mb-2">
+          {/* Tabs */}
+          <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-lg w-fit">
+            <Button 
+              variant={activeTab === 'logistica' ? 'default' : 'ghost'} 
+              size="sm" 
+              onClick={() => setActiveTab('logistica')}
+              className="h-8 px-4 text-[12px] font-bold gap-2"
+            >
+              <LayoutDashboard className="w-4 h-4" />
+              LOGÍSTICA
+            </Button>
+            <Button 
+              variant={activeTab === 'carregamento' ? 'default' : 'ghost'} 
+              size="sm" 
+              onClick={() => setActiveTab('carregamento')}
+              className="h-8 px-4 text-[12px] font-bold gap-2"
+            >
+              <Truck className="w-4 h-4" />
+              CARREGAMENTO
+            </Button>
+          </div>
+
+          {/* Month Selector */}
+          <div className="flex items-center gap-2">
+            <Label className="text-[11px] font-bold uppercase text-muted-foreground">Mês:</Label>
+            <Select value={filterMonth} onValueChange={setFilterMonth}>
+              <SelectTrigger className="h-8 w-32 text-[12px] bg-white font-bold text-slate-700">
+                <SelectValue placeholder="Mês" />
+              </SelectTrigger>
+              <SelectContent>
+                {Array.from(new Set([
+                  new Date().toISOString().slice(0, 7),
+                  ...routes.map(r => new Date(r.createdAt).toISOString().slice(0, 7))
+                ])).sort().reverse().map(monthStr => {
+                  const [y, m] = monthStr.split('-');
+                  const monthName = new Date(parseInt(y), parseInt(m) - 1, 1).toLocaleString('pt-BR', { month: 'long' });
+                  return (
+                    <SelectItem key={monthStr} value={monthStr} className="capitalize">
+                      {monthName} / {y}
+                    </SelectItem>
+                  )
+                })}
+              </SelectContent>
+            </Select>
+          </div>
         </div>
 
         {activeTab === 'logistica' ? (
@@ -656,84 +772,107 @@ export default function App() {
                   <p className="text-[11px] font-bold uppercase text-muted-foreground mb-1">Total Geral</p>
                   <p className="text-[24px] font-bold text-slate-900">{stats.total}</p>
                 </div>
-                <div className="mt-4 pt-4 border-t border-slate-100 flex justify-between text-[11px]">
-                  <span className="text-blue-600 font-bold">NOVAS: {stats.nova.count}</span>
-                  <span className="text-orange-600 font-bold">ANTIGAS: {stats.antiga.count}</span>
+                <div className="mt-4 pt-3 border-t border-slate-100 grid grid-cols-4 gap-1 text-[9px] text-center">
+                  <div className="flex flex-col bg-slate-50 p-1 rounded"><span className="text-muted-foreground">Carreta</span><span className="font-bold text-slate-700">{stats.vehicle.carreta}</span></div>
+                  <div className="flex flex-col bg-slate-50 p-1 rounded"><span className="text-muted-foreground">Truck</span><span className="font-bold text-slate-700">{stats.vehicle.truck}</span></div>
+                  <div className="flex flex-col bg-slate-50 p-1 rounded"><span className="text-muted-foreground">3/4</span><span className="font-bold text-slate-700">{stats.vehicle.tresquartos}</span></div>
+                  <div className="flex flex-col bg-slate-50 p-1 rounded"><span className="text-muted-foreground">Container</span><span className="font-bold text-slate-700">{stats.vehicle.container}</span></div>
                 </div>
               </Card>
 
-              <Card 
-                className="p-4 bg-white border-border shadow-sm flex flex-col justify-between cursor-pointer hover:bg-slate-50 transition-colors"
-                onClick={() => {
-                  setActiveTab('carregamento');
-                }}
-              >
-                <div>
-                  <p className="text-[11px] font-bold uppercase text-green-600 mb-1">Rotas Liberadas Hoje</p>
-                  <p className="text-[24px] font-bold text-slate-900">
-                    {loadingCards.filter(c => {
-                      const todayISO = new Date().toISOString().split('T')[0];
-                      const [year, month, day] = todayISO.split('-');
-                      const todayBR = `${day}/${month}/${year}`;
-                      return c.dataSep === todayISO || c.dataSep === todayBR;
-                    }).length}
-                  </p>
-                </div>
-                <div className="mt-4 pt-4 border-t border-slate-100 flex justify-between text-[11px]">
-                  <span className="text-muted-foreground font-bold">Clique para ver o painel</span>
+              <Card className="p-4 bg-white border-border shadow-sm flex flex-col justify-between">
+                <div className="flex gap-4 h-full">
+                  <div 
+                    className="flex-1 flex flex-col justify-between cursor-pointer hover:bg-slate-50 transition-colors p-2 -m-2 rounded"
+                    onClick={() => setActiveTab('carregamento')}
+                  >
+                    <div>
+                      <p className="text-[10px] font-bold uppercase text-green-600 mb-1 leading-tight">Liberadas<br/>Hoje</p>
+                      <p className="text-[20px] font-bold text-slate-900">
+                        {loadingCards.filter(c => {
+                          const todayISO = new Date().toISOString().split('T')[0];
+                          const [year, month, day] = todayISO.split('-');
+                          const todayBR = `${day}/${month}/${year}`;
+                          return c.dataSep === todayISO || c.dataSep === todayBR;
+                        }).length}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="w-px bg-slate-100 my-2"></div>
+                  <div 
+                    className="flex-1 flex flex-col justify-between cursor-pointer hover:bg-slate-50 transition-colors p-2 -m-2 rounded"
+                    onClick={() => {
+                      const tomorrow = new Date();
+                      tomorrow.setDate(tomorrow.getDate() + 1);
+                      setFilterDate(tomorrow.toISOString().split('T')[0]);
+                      setActiveTab('logistica');
+                    }}
+                  >
+                    <div>
+                      <p className="text-[10px] font-bold uppercase text-blue-600 mb-1 leading-tight">Para<br/>Amanhã</p>
+                      <p className="text-[20px] font-bold text-slate-900">
+                        {
+                          routes.filter(r => {
+                            const tomorrow = new Date();
+                            tomorrow.setDate(tomorrow.getDate() + 1);
+                            const tomorrowISO = tomorrow.toISOString().split('T')[0];
+                            return r.deliveries.some(d => d.deliveryDate === tomorrowISO);
+                          }).length
+                        }
+                      </p>
+                    </div>
+                  </div>
                 </div>
               </Card>
 
-              <Card className="p-4 bg-white border-border shadow-sm">
-                <div className="flex justify-between items-start mb-3">
+              <Card className="p-4 bg-white border-border shadow-sm flex flex-col justify-between">
+                <div className="flex justify-between items-start mb-2">
                   <div>
-                    <p className="text-[11px] font-bold uppercase text-blue-600">Status Carregamento (Novas)</p>
+                    <p className="text-[11px] font-bold uppercase text-blue-600">Carregamento (Novas)</p>
                     <div className="flex items-baseline gap-2">
                       <p className="text-[20px] font-bold text-slate-900">{stats.nova.loading}%</p>
-                      <span className="text-[10px] font-bold text-muted-foreground">({stats.nova.carregada} de {stats.nova.count})</span>
+                      <span className="text-[10px] font-bold text-muted-foreground">({stats.nova.carregada}/{stats.nova.count})</span>
                     </div>
                   </div>
-                  <Badge className="bg-blue-50 text-blue-600 border-blue-100 hover:bg-blue-50">NOVAS</Badge>
                 </div>
-                <div className="grid grid-cols-3 gap-2 text-[9px] font-bold uppercase">
-                  <div className="flex flex-col">
-                    <span className="text-muted-foreground">Plástico</span>
-                    <span className="text-slate-600">{stats.nova.cargo.plastico.pendente} Pend / <span className="text-green-600">{stats.nova.cargo.plastico.carregada} Carr</span></span>
+                <div className="grid grid-cols-3 gap-1 text-[9px] font-bold uppercase text-center mt-2">
+                  <div className="flex flex-col bg-slate-50 rounded p-1">
+                    <span className="text-muted-foreground mb-0.5">Plást. ({stats.nova.cargo.plastico.total})</span>
+                    <span className="text-slate-500">{stats.nova.cargo.plastico.pendente}P / <span className="text-green-600">{stats.nova.cargo.plastico.carregada}C</span></span>
                   </div>
-                  <div className="flex flex-col">
-                    <span className="text-muted-foreground">Porcelana</span>
-                    <span className="text-slate-600">{stats.nova.cargo.porcelana.pendente} Pend / <span className="text-green-600">{stats.nova.cargo.porcelana.carregada} Carr</span></span>
+                  <div className="flex flex-col bg-slate-50 rounded p-1">
+                    <span className="text-muted-foreground mb-0.5">Porc. ({stats.nova.cargo.porcelana.total})</span>
+                    <span className="text-slate-500">{stats.nova.cargo.porcelana.pendente}P / <span className="text-green-600">{stats.nova.cargo.porcelana.carregada}C</span></span>
                   </div>
-                  <div className="flex flex-col">
-                    <span className="text-muted-foreground">Consol.</span>
-                    <span className="text-slate-600">{stats.nova.cargo.consolidado.pendente} Pend / <span className="text-green-600">{stats.nova.cargo.consolidado.carregada} Carr</span></span>
+                  <div className="flex flex-col bg-slate-50 rounded p-1">
+                    <span className="text-muted-foreground mb-0.5">Cons. ({stats.nova.cargo.consolidado.total})</span>
+                    <span className="text-slate-500">{stats.nova.cargo.consolidado.pendente}P / <span className="text-green-600">{stats.nova.cargo.consolidado.carregada}C</span></span>
                   </div>
                 </div>
               </Card>
 
-              <Card className="p-4 bg-white border-border shadow-sm">
-                <div className="flex justify-between items-start mb-3">
+              <Card className="p-4 bg-white border-border shadow-sm flex flex-col justify-between">
+                <div className="flex justify-between items-start mb-2">
                   <div>
-                    <p className="text-[11px] font-bold uppercase text-orange-600">Status Carregamento (Antigas)</p>
+                    <p className="text-[11px] font-bold uppercase text-orange-600">Carregamento (Antigas)</p>
                     <div className="flex items-baseline gap-2">
                       <p className="text-[20px] font-bold text-slate-900">{stats.antiga.loading}%</p>
-                      <span className="text-[10px] font-bold text-muted-foreground">({stats.antiga.carregada} de {stats.antiga.count})</span>
+                      <span className="text-[10px] font-bold text-muted-foreground">({stats.antiga.carregada}/{stats.antiga.count})</span>
                     </div>
                   </div>
-                  <Badge className="bg-orange-50 text-orange-600 border-orange-100 hover:bg-orange-50">ANTIGAS</Badge>
                 </div>
-                <div className="grid grid-cols-3 gap-2 text-[9px] font-bold uppercase">
-                  <div className="flex flex-col">
-                    <span className="text-muted-foreground">Plástico</span>
-                    <span className="text-slate-600">{stats.antiga.cargo.plastico.pendente} Pend / <span className="text-green-600">{stats.antiga.cargo.plastico.carregada} Carr</span></span>
+                <div className="grid grid-cols-3 gap-1 text-[9px] font-bold uppercase text-center mt-2">
+                  <div className="flex flex-col bg-slate-50 rounded p-1">
+                    <span className="text-muted-foreground mb-0.5">Plást. ({stats.antiga.cargo.plastico.total})</span>
+                    <span className="text-slate-500">{stats.antiga.cargo.plastico.pendente}P / <span className="text-green-600">{stats.antiga.cargo.plastico.carregada}C</span></span>
                   </div>
-                  <div className="flex flex-col">
-                    <span className="text-muted-foreground">Porcelana</span>
-                    <span className="text-slate-600">{stats.antiga.cargo.porcelana.pendente} Pend / <span className="text-green-600">{stats.antiga.cargo.porcelana.carregada} Carr</span></span>
+                  <div className="flex flex-col bg-slate-50 rounded p-1">
+                    <span className="text-muted-foreground mb-0.5">Porc. ({stats.antiga.cargo.porcelana.total})</span>
+                    <span className="text-slate-500">{stats.antiga.cargo.porcelana.pendente}P / <span className="text-green-600">{stats.antiga.cargo.porcelana.carregada}C</span></span>
                   </div>
-                  <div className="flex flex-col">
-                    <span className="text-muted-foreground">Consol.</span>
-                    <span className="text-slate-600">{stats.antiga.cargo.consolidado.pendente} Pend / <span className="text-green-600">{stats.antiga.cargo.consolidado.carregada} Carr</span></span>
+                  <div className="flex flex-col bg-slate-50 rounded p-1">
+                    <span className="text-muted-foreground mb-0.5">Cons. ({stats.antiga.cargo.consolidado.total})</span>
+                    <span className="text-slate-500">{stats.antiga.cargo.consolidado.pendente}P / <span className="text-green-600">{stats.antiga.cargo.consolidado.carregada}C</span></span>
                   </div>
                 </div>
               </Card>
@@ -826,7 +965,8 @@ export default function App() {
                     <RouteTable 
                       routes={routesNova} 
                       user={user} 
-                      isRouteLoaded={isRouteLoaded}
+                      searchTerm={searchTerm}
+                      getRouteLoadingStatus={getRouteLoadingStatus}
                       onEdit={handleEdit} 
                       onDelete={handleDelete} 
                       onRelease={handleOpenReleaseDialog}
@@ -843,7 +983,8 @@ export default function App() {
                     <RouteTable 
                       routes={routesAntiga} 
                       user={user} 
-                      isRouteLoaded={isRouteLoaded}
+                      searchTerm={searchTerm}
+                      getRouteLoadingStatus={getRouteLoadingStatus}
                       onEdit={handleEdit} 
                       onDelete={handleDelete} 
                       onRelease={handleOpenReleaseDialog}
@@ -901,15 +1042,16 @@ export default function App() {
 
 interface RouteTableProps {
   routes: Route[];
-  user: User;
-  isRouteLoaded: (route: Route) => boolean;
+  user: any;
+  searchTerm?: string;
+  getRouteLoadingStatus: (route: Route) => string | null;
   onEdit: (route: Route) => void;
   onDelete: (id: string, createdBy: string) => void;
   onRelease: (route: Route) => void;
   onRevertEmbarcado: (route: Route) => void;
 }
 
-function RouteTable({ routes, user, isRouteLoaded, onEdit, onDelete, onRelease, onRevertEmbarcado }: RouteTableProps) {
+function RouteTable({ routes, user, searchTerm = '', getRouteLoadingStatus, onEdit, onDelete, onRelease, onRevertEmbarcado }: RouteTableProps) {
   const getCargoBadgeColor = (type: string) => {
     switch (type) {
       case 'plastico': return 'bg-emerald-100 text-emerald-700 border-emerald-200';
@@ -917,6 +1059,15 @@ function RouteTable({ routes, user, isRouteLoaded, onEdit, onDelete, onRelease, 
       case 'consolidado': return 'bg-amber-100 text-amber-700 border-amber-200';
       default: return 'bg-slate-100 text-slate-700 border-slate-200';
     }
+  };
+
+  const highlightText = (text: string) => {
+    if (!searchTerm || !text) return text;
+    const regex = new RegExp(`(${searchTerm})`, 'gi');
+    const parts = text.split(regex);
+    return parts.map((part, i) => 
+      regex.test(part) ? <mark key={i} className="bg-yellow-200 text-amber-900 rounded px-0.5">{part}</mark> : part
+    );
   };
 
   return (
@@ -931,27 +1082,37 @@ function RouteTable({ routes, user, isRouteLoaded, onEdit, onDelete, onRelease, 
       </TableHeader>
       <TableBody>
         {routes.length > 0 ? (
-          routes.map((route) => (
-            <TableRow 
-              key={route.id} 
-              className="hover:bg-slate-50/80 group border-b border-border cursor-pointer transition-colors"
-              onClick={() => onEdit(route)}
-            >
-              <TableCell className="font-bold py-2 px-3 text-primary">
-                <div className="flex flex-col gap-1 items-start">
-                  <span>#{route.routeNumber}</span>
-                  {isRouteLoaded(route) && (
-                    <Badge 
-                      className="bg-green-600 text-white text-[9px] px-1 py-0 w-fit cursor-pointer hover:bg-green-700 transition-colors"
-                      title="Clique para retornar a status PENDENTE"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onRevertEmbarcado(route);
-                      }}
-                    >
-                      EMBARCADO
-                    </Badge>
-                  )}
+          routes.map((route) => {
+            const loadingStatus = getRouteLoadingStatus(route);
+            return (
+              <TableRow 
+                key={route.id} 
+                className="hover:bg-slate-50/80 group border-b border-border cursor-pointer transition-colors"
+                onClick={() => onEdit(route)}
+              >
+                <TableCell className="font-bold py-2 px-3 text-primary">
+                  <div className="flex flex-col gap-1 items-start">
+                    <span>#{route.routeNumber}</span>
+                    {loadingStatus && (
+                      <Badge 
+                        className={`text-white text-[9px] px-1 py-0 w-fit cursor-pointer transition-colors ${
+                          loadingStatus === 'Embarcado' ? 'bg-green-600 hover:bg-green-700' :
+                          loadingStatus === 'Carregando' ? 'bg-red-500 hover:bg-red-600' :
+                          loadingStatus === 'Separando' ? 'bg-orange-500 hover:bg-orange-600' :
+                          loadingStatus === 'Separado' ? 'bg-purple-600 hover:bg-purple-700' :
+                          'bg-slate-500 hover:bg-slate-600'
+                        }`}
+                        title={loadingStatus === 'Embarcado' ? "Clique para retornar a status PENDENTE" : ""}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (loadingStatus === 'Embarcado') {
+                            onRevertEmbarcado(route);
+                          }
+                        }}
+                      >
+                        {loadingStatus.toUpperCase()}
+                      </Badge>
+                    )}
                 </div>
               </TableCell>
               <TableCell className="py-2 px-3">
@@ -984,9 +1145,9 @@ function RouteTable({ routes, user, isRouteLoaded, onEdit, onDelete, onRelease, 
                       </div>
                       {(d.orderNumber || d.invoiceNumber) && (
                         <div className="flex items-center gap-2 pl-2.5 mt-0.5 text-[10px] text-slate-500">
-                          {d.orderNumber && <span><span className="font-medium">Ped:</span> {d.orderNumber}</span>}
+                          {d.orderNumber && <span><span className="font-medium">Ped:</span> {highlightText(d.orderNumber)}</span>}
                           {d.orderNumber && d.invoiceNumber && <span className="text-slate-300">•</span>}
-                          {d.invoiceNumber && <span><span className="font-medium">NF:</span> {d.invoiceNumber}</span>}
+                          {d.invoiceNumber && <span><span className="font-medium">NF:</span> {highlightText(d.invoiceNumber)}</span>}
                         </div>
                       )}
                     </div>
@@ -1027,7 +1188,8 @@ function RouteTable({ routes, user, isRouteLoaded, onEdit, onDelete, onRelease, 
                 </div>
               </TableCell>
             </TableRow>
-          ))
+            );
+          })
         ) : (
           <TableRow>
             <TableCell colSpan={5} className="h-20 text-center text-muted-foreground italic">
