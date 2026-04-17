@@ -125,6 +125,7 @@ export default function App() {
   const [routeToRelease, setRouteToRelease] = useState<Route | null>(null);
   const [releaseDate, setReleaseDate] = useState<string>(new Date().toISOString().split('T')[0]);
   const [loadingFilterDate, setLoadingFilterDate] = useState<string>(new Date().toISOString().split('T')[0]);
+  const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
     const unsubscribeAuth = onAuthStateChanged(auth, (currentUser) => {
@@ -150,6 +151,10 @@ export default function App() {
     }
   }, [user]);
 
+  const [isGlobalSyncing, setIsGlobalSyncing] = useState(false);
+
+
+
   useEffect(() => {
     if (user) {
       const unsubscribeRoutes = routeService.subscribeToRoutes((updatedRoutes) => {
@@ -160,6 +165,99 @@ export default function App() {
       setRoutes([]);
     }
   }, [user]);
+
+  // Sincronização Global Automática a cada 3 minutos
+  useEffect(() => {
+    if (!user || routes.length === 0) return;
+
+    const runGlobalSync = async () => {
+      // Ignora se já estiver rodando
+      if (isGlobalSyncing) return;
+      setIsGlobalSyncing(true);
+
+      try {
+        const extractOrders = (text: string) => text.match(/\b\d+-\d+\b/g) || [];
+        const ordersToFetch = new Set<string>();
+        const routesToUpdate = new Map<string, Route>();
+
+        routes.forEach(route => {
+          let hasMissing = false;
+          route.deliveries.forEach(d => {
+            if (d.orderNumber && !d.invoiceNumber) {
+              extractOrders(d.orderNumber).forEach(o => ordersToFetch.add(o));
+              hasMissing = true;
+            }
+          });
+          if (hasMissing) {
+            routesToUpdate.set(route.id, route);
+          }
+        });
+
+        if (ordersToFetch.size > 0) {
+          const url = "https://script.google.com/macros/s/AKfycbx-Lmqxk-Wbss3icKxOZ0KYzrOWCOn9oOflvQ7ax29jiGYe2Ih3t3z52-nw0hR0kTJHpg/exec";
+          const allOrders = Array.from(ordersToFetch);
+          const mapping = await nfService.fetchNFs(allOrders, url);
+          
+          const normalize = (o: string) => {
+            const [ped, dig] = o.split('-');
+            if (!dig) return o;
+            return `${ped}-${parseInt(dig, 10)}`;
+          };
+
+          for (const [routeId, route] of routesToUpdate.entries()) {
+            let updated = false;
+            const newDeliveries = route.deliveries.map(d => {
+              if (!d.orderNumber || d.invoiceNumber) return d;
+              
+              const orders = extractOrders(d.orderNumber);
+              const nfsEncontradas: string[] = [];
+              
+              orders.forEach(o => {
+                const norm = normalize(o);
+                const result = mapping[norm] || mapping[o];
+                if (result) {
+                  if (Array.isArray(result)) {
+                    nfsEncontradas.push(...result);
+                  } else {
+                    nfsEncontradas.push(result);
+                  }
+                }
+              });
+              
+              if (nfsEncontradas.length > 0) {
+                updated = true;
+                return { ...d, invoiceNumber: Array.from(new Set(nfsEncontradas)).join(', ') };
+              }
+              return d;
+            });
+
+            if (updated) {
+              await routeService.updateRoute(routeId, { deliveries: newDeliveries });
+            }
+          }
+        }
+      } catch (err) {
+        console.error("Global Auto-sync failed:", err);
+      } finally {
+        setIsGlobalSyncing(false);
+      }
+    };
+
+    // Roda a sincronização 10 segundos após abrir/carregar os dados
+    const initialTimout = setTimeout(() => {
+      runGlobalSync();
+    }, 10000);
+
+    // E depois continua rodando a cada 3 minutos (180000 ms) enquanto o app estiver aberto
+    const interval = setInterval(() => {
+      runGlobalSync();
+    }, 180000);
+
+    return () => {
+      clearTimeout(initialTimout);
+      clearInterval(interval);
+    };
+  }, [routes, user]);
 
   const handleLogin = async () => {
     const provider = new GoogleAuthProvider();
@@ -206,84 +304,75 @@ export default function App() {
     setFormData(prev => ({ ...prev, type: value }));
   };
 
-  const triggerAutoSync = async (routeId: string, currentData: RouteFormData) => {
-    // Extrai os pedidos da rota salva
-    const extractOrders = (text: string) => text.match(/\b\d+-\d+\b/g) || [];
-    const ordersToFetch = new Set<string>();
-
-    currentData.deliveries.forEach(d => {
-      if (d.orderNumber && !d.invoiceNumber) {
-        extractOrders(d.orderNumber).forEach(o => ordersToFetch.add(o));
-      }
-    });
-
-    if (ordersToFetch.size === 0) return; // Se não houver pendentes, finaliza.
-
-    try {
-      const url = "https://script.google.com/macros/s/AKfycbx-Lmqxk-Wbss3icKxOZ0KYzrOWCOn9oOflvQ7ax29jiGYe2Ih3t3z52-nw0hR0kTJHpg/exec";
-      const allOrders = Array.from(ordersToFetch);
-      const mapping = await nfService.fetchNFs(allOrders, url);
-      
-      const normalize = (o: string) => {
-        const [ped, dig] = o.split('-');
-        if (!dig) return o;
-        return `${ped}-${parseInt(dig, 10)}`;
-      };
-
-      let updated = false;
-      const newDeliveries = currentData.deliveries.map(d => {
-        if (!d.orderNumber || d.invoiceNumber) return d;
-        
-        const orders = extractOrders(d.orderNumber);
-        const nfsEncontradas: string[] = [];
-        
-        orders.forEach(o => {
-          const norm = normalize(o);
-          const result = mapping[norm] || mapping[o];
-          if (result) {
-            if (Array.isArray(result)) {
-              nfsEncontradas.push(...result);
-            } else {
-              nfsEncontradas.push(result);
-            }
-          }
-        });
-        
-        if (nfsEncontradas.length > 0) {
-          updated = true;
-          return { ...d, invoiceNumber: Array.from(new Set(nfsEncontradas)).join(', ') };
-        }
-        return d;
-      });
-
-      if (updated) {
-        await routeService.updateRoute(routeId, { ...currentData, deliveries: newDeliveries });
-      }
-    } catch(err) {
-      console.error("Auto-sync NFs failed in background:", err);
-    }
-  };
-
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
+    setIsSaving(true);
     try {
-      let savedId = editingId;
-      if (editingId) {
-        await routeService.updateRoute(editingId, formData);
-      } else {
-        savedId = await routeService.addRoute(formData);
-      }
+      let finalFormData = { ...formData };
       
-      // Gatilho de sincronização em segundo plano!
-      if (savedId) {
-        triggerAutoSync(savedId, formData);
+      // Busca NFs de forma síncrona ANTES de salvar a rota
+      const extractOrders = (text: string) => text.match(/\b\d+-\d+\b/g) || [];
+      const ordersToFetch = new Set<string>();
+
+      finalFormData.deliveries.forEach(d => {
+        if (d.orderNumber && !d.invoiceNumber) {
+          extractOrders(d.orderNumber).forEach(o => ordersToFetch.add(o));
+        }
+      });
+
+      if (ordersToFetch.size > 0) {
+        const url = "https://script.google.com/macros/s/AKfycbx-Lmqxk-Wbss3icKxOZ0KYzrOWCOn9oOflvQ7ax29jiGYe2Ih3t3z52-nw0hR0kTJHpg/exec";
+        const allOrders = Array.from(ordersToFetch);
+        const mapping = await nfService.fetchNFs(allOrders, url);
+        
+        const normalize = (o: string) => {
+          const [ped, dig] = o.split('-');
+          if (!dig) return o;
+          return `${ped}-${parseInt(dig, 10)}`;
+        };
+
+        const newDeliveries = finalFormData.deliveries.map(d => {
+          if (!d.orderNumber || d.invoiceNumber) return d;
+          
+          const orders = extractOrders(d.orderNumber);
+          const nfsEncontradas: string[] = [];
+          
+          orders.forEach(o => {
+            const norm = normalize(o);
+            const result = mapping[norm] || mapping[o];
+            if (result) {
+              if (Array.isArray(result)) {
+                nfsEncontradas.push(...result);
+              } else {
+                nfsEncontradas.push(result);
+              }
+            }
+          });
+          
+          if (nfsEncontradas.length > 0) {
+            return { ...d, invoiceNumber: Array.from(new Set(nfsEncontradas)).join(', ') };
+          }
+          return d;
+        });
+
+        finalFormData.deliveries = newDeliveries;
+        setFormData(finalFormData); // Atualiza também no visual, por garantia
       }
 
+      // Agora salva a rota já contendo as notas (se houverem)
+      if (editingId) {
+        await routeService.updateRoute(editingId, finalFormData);
+      } else {
+        await routeService.addRoute(finalFormData);
+      }
+      
       handleCloseDialog();
       setIsSidebarOpen(false);
     } catch (error) {
       console.error("Erro ao salvar rota:", error);
       alert("Erro ao salvar rota. Verifique suas permissões.");
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -757,8 +846,8 @@ export default function App() {
             Sincronizar NFs do formulário
           </Button>
 
-          <Button type="submit" className="w-full h-10 font-bold text-[13px] mt-4">
-            {editingId ? 'Salvar Alterações' : 'Finalizar Rota'}
+          <Button type="submit" disabled={isSaving} className="w-full h-10 font-bold text-[13px] mt-4">
+            {isSaving ? 'Salvando (Buscando Notas)...' : (editingId ? 'Salvar Alterações' : 'Finalizar Rota')}
           </Button>
           
           {editingId && (
