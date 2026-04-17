@@ -124,6 +124,7 @@ export default function App() {
   const [loadingStats, setLoadingStats] = useState<any>(null);
   const [routeToRelease, setRouteToRelease] = useState<Route | null>(null);
   const [releaseDate, setReleaseDate] = useState<string>(new Date().toISOString().split('T')[0]);
+  const [loadingFilterDate, setLoadingFilterDate] = useState<string>(new Date().toISOString().split('T')[0]);
 
   useEffect(() => {
     const unsubscribeAuth = onAuthStateChanged(auth, (currentUser) => {
@@ -775,7 +776,10 @@ export default function App() {
                 <div className="flex gap-4 h-full">
                   <div 
                     className="flex-1 flex flex-col justify-between cursor-pointer hover:bg-slate-50 transition-colors p-2 -m-2 rounded"
-                    onClick={() => setActiveTab('carregamento')}
+                    onClick={() => {
+                      setLoadingFilterDate(new Date().toISOString().split('T')[0]);
+                      setActiveTab('carregamento');
+                    }}
                   >
                     <div>
                       <p className="text-[10px] font-bold uppercase text-green-600 mb-1 leading-tight">Liberadas<br/>Hoje</p>
@@ -792,7 +796,12 @@ export default function App() {
                   <div className="w-px bg-slate-100 my-2"></div>
                   <div 
                     className="flex-1 flex flex-col justify-between cursor-pointer hover:bg-slate-50 transition-colors p-2 -m-2 rounded"
-                    onClick={() => setActiveTab('carregamento')}
+                    onClick={() => {
+                      const tomorrow = new Date();
+                      tomorrow.setDate(tomorrow.getDate() + 1);
+                      setLoadingFilterDate(tomorrow.toISOString().split('T')[0]);
+                      setActiveTab('carregamento');
+                    }}
                   >
                     <div>
                       <p className="text-[10px] font-bold uppercase text-blue-600 mb-1 leading-tight">Para<br/>Amanhã</p>
@@ -982,7 +991,13 @@ export default function App() {
             </section>
           </>
         ) : (
-          <LoadingPanel cards={loadingCards} stats={loadingStats} localRoutes={routes} />
+          <LoadingPanel 
+            cards={loadingCards} 
+            stats={loadingStats} 
+            localRoutes={routes} 
+            filterDate={loadingFilterDate}
+            setFilterDate={setLoadingFilterDate}
+          />
         )}
       </main>
 
@@ -1188,9 +1203,7 @@ function RouteTable({ routes, user, searchTerm = '', getRouteLoadingStatus, onEd
   );
 }
 
-function LoadingPanel({ cards, stats, localRoutes }: { cards: LoadingCard[], stats: any, localRoutes: Route[] }) {
-  const [filterDate, setFilterDate] = useState<string>(new Date().toISOString().split('T')[0]);
-
+function LoadingPanel({ cards, stats, localRoutes, filterDate, setFilterDate }: { cards: LoadingCard[], stats: any, localRoutes: Route[], filterDate: string, setFilterDate: (date: string) => void }) {
   const filteredCards = cards.filter(card => {
     if (!filterDate) return true;
     
