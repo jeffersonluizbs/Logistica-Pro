@@ -107,6 +107,14 @@ const UFS = [
   'PA', 'PB', 'PR', 'PE', 'PI', 'RJ', 'RN', 'RS', 'RO', 'RR', 'SC', 'SP', 'SE', 'TO'
 ];
 
+const REGIOES = [
+  'Norte',
+  'Nordeste',
+  'Centro-Oeste',
+  'Sudeste',
+  'Sul'
+];
+
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
   const [routes, setRoutes] = useState<Route[]>([]);
@@ -115,6 +123,7 @@ export default function App() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterUf, setFilterUf] = useState<string>('all');
+  const [filterRegion, setFilterRegion] = useState<string>('all');
   const [filterDate, setFilterDate] = useState<string>('');
   const [filterMonth, setFilterMonth] = useState<string>(new Date().toISOString().slice(0, 7));
   const [loading, setLoading] = useState(true);
@@ -454,9 +463,10 @@ export default function App() {
       );
     
     const matchesUf = filterUf === 'all' || route.deliveries.some(d => d.uf === filterUf);
+    const matchesRegion = filterRegion === 'all' || route.deliveries.some(d => d.region === filterRegion);
     const matchesDate = !filterDate || route.deliveries.some(d => d.deliveryDate === filterDate);
     
-    return matchesSearch && matchesUf && matchesDate;
+    return matchesSearch && matchesUf && matchesRegion && matchesDate;
   });
 
   const routesNova = filteredRoutes.filter(r => r.type === 'nova');
@@ -714,13 +724,16 @@ export default function App() {
                   </div>
                   <div className="flex flex-col gap-1">
                     <Label className="text-[10px] font-bold uppercase text-muted-foreground">Região</Label>
-                    <Input 
-                      value={delivery.region} 
-                      onChange={(e) => handleDeliveryChange(index, 'region', e.target.value)} 
-                      placeholder="Região" 
-                      className="h-8 text-[12px]"
-                      required 
-                    />
+                    <Select value={delivery.region} onValueChange={(val) => handleDeliveryChange(index, 'region', val)} required>
+                      <SelectTrigger className="h-8 text-[12px]">
+                        <SelectValue placeholder="Região" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {REGIOES.map(reg => (
+                          <SelectItem key={reg} value={reg}>{reg}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
                 </div>
 
@@ -1064,7 +1077,7 @@ export default function App() {
                 </div>
                 
                 <div className="flex items-center gap-4">
-                  {(searchTerm || filterDate || filterUf !== 'all') && (
+                  {(searchTerm || filterDate || filterUf !== 'all' || filterRegion !== 'all') && (
                     <Button 
                       variant="ghost" 
                       size="sm" 
@@ -1072,6 +1085,7 @@ export default function App() {
                         setSearchTerm('');
                         setFilterDate('');
                         setFilterUf('all');
+                        setFilterRegion('all');
                       }}
                       className="h-8 text-[11px] font-bold text-destructive hover:text-destructive hover:bg-destructive/10"
                     >
@@ -1108,6 +1122,21 @@ export default function App() {
                         <SelectItem value="all">Todas</SelectItem>
                         {UFS.map(uf => (
                           <SelectItem key={uf} value={uf}>{uf}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <Label className="text-[11px] font-bold uppercase text-muted-foreground">Região:</Label>
+                    <Select value={filterRegion} onValueChange={setFilterRegion}>
+                      <SelectTrigger className="h-8 w-32 text-[12px] bg-white">
+                        <SelectValue placeholder="Todas" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">Todas</SelectItem>
+                        {REGIOES.map(reg => (
+                          <SelectItem key={reg} value={reg}>{reg}</SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
