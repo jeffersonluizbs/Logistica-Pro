@@ -125,7 +125,8 @@ const ADMIN_EMAILS = [
   'rosiane.araujo@tramontina.com',
   'leonildo.lima@tramontina.com',
   'willian.bernardo@tramontina.com',
-  'leonardo.viana@tramontina.com'
+  'leonardo.viana@tramontina.com',
+  'jeffersonluizbs@gmail.com'
 ];
 
 export default function App() {
