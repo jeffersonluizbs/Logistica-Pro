@@ -970,7 +970,7 @@ export default function App() {
                   <p className="text-[11px] font-bold uppercase text-muted-foreground mb-1">Total Geral</p>
                   <p className="text-[24px] font-bold text-slate-900">{stats.total}</p>
                 </div>
-                <div className="mt-4 pt-3 border-t border-slate-100 grid grid-cols-4 gap-1 text-[9px] text-center">
+                <div className="mt-4 pt-3 border-t border-slate-100 grid grid-cols-4 gap-1 text-[11px] text-center">
                   <div className="flex flex-col bg-slate-50 p-1 rounded"><span className="text-muted-foreground">Carreta</span><span className="font-bold text-slate-700">{stats.vehicle.carreta}</span></div>
                   <div className="flex flex-col bg-slate-50 p-1 rounded"><span className="text-muted-foreground">Truck</span><span className="font-bold text-slate-700">{stats.vehicle.truck}</span></div>
                   <div className="flex flex-col bg-slate-50 p-1 rounded"><span className="text-muted-foreground">3/4</span><span className="font-bold text-slate-700">{stats.vehicle.tresquartos}</span></div>
@@ -988,7 +988,7 @@ export default function App() {
                     }}
                   >
                     <div>
-                      <p className="text-[10px] font-bold uppercase text-green-600 mb-1 leading-tight">Liberadas<br/>Hoje</p>
+                      <p className="text-xs font-bold uppercase text-green-600 mb-1 leading-tight">Liberadas<br/>Hoje</p>
                       <p className="text-[20px] font-bold text-slate-900">
                         {loadingCards.filter(c => {
                           const todayISO = new Date().toISOString().split('T')[0];
@@ -1010,7 +1010,7 @@ export default function App() {
                     }}
                   >
                     <div>
-                      <p className="text-[10px] font-bold uppercase text-blue-600 mb-1 leading-tight">Para<br/>Amanhã</p>
+                      <p className="text-xs font-bold uppercase text-blue-600 mb-1 leading-tight">Para<br/>Amanhã</p>
                       <p className="text-[20px] font-bold text-slate-900">
                         {loadingCards.filter(c => {
                           const tomorrow = new Date();
@@ -1032,11 +1032,11 @@ export default function App() {
                     <p className="text-[11px] font-bold uppercase text-blue-600">Carregamento (Novas)</p>
                     <div className="flex items-baseline gap-2">
                       <p className="text-[20px] font-bold text-slate-900">{stats.nova.loading}%</p>
-                      <span className="text-[10px] font-bold text-muted-foreground">({stats.nova.carregada}/{stats.nova.count})</span>
+                      <span className="text-xs font-bold text-muted-foreground">({stats.nova.carregada}/{stats.nova.count})</span>
                     </div>
                   </div>
                 </div>
-                <div className="grid grid-cols-3 gap-1 text-[9px] font-bold uppercase text-center mt-2">
+                <div className="grid grid-cols-3 gap-1 text-[11px] font-bold uppercase text-center mt-2">
                   <div className="flex flex-col bg-slate-50 rounded p-1">
                     <span className="text-muted-foreground mb-0.5">Plást. ({stats.nova.cargo.plastico.total})</span>
                     <span className="text-slate-500">{stats.nova.cargo.plastico.pendente}P / <span className="text-green-600">{stats.nova.cargo.plastico.carregada}C</span></span>
@@ -1058,11 +1058,11 @@ export default function App() {
                     <p className="text-[11px] font-bold uppercase text-orange-600">Carregamento (Antigas)</p>
                     <div className="flex items-baseline gap-2">
                       <p className="text-[20px] font-bold text-slate-900">{stats.antiga.loading}%</p>
-                      <span className="text-[10px] font-bold text-muted-foreground">({stats.antiga.carregada}/{stats.antiga.count})</span>
+                      <span className="text-xs font-bold text-muted-foreground">({stats.antiga.carregada}/{stats.antiga.count})</span>
                     </div>
                   </div>
                 </div>
-                <div className="grid grid-cols-3 gap-1 text-[9px] font-bold uppercase text-center mt-2">
+                <div className="grid grid-cols-3 gap-1 text-[11px] font-bold uppercase text-center mt-2">
                   <div className="flex flex-col bg-slate-50 rounded p-1">
                     <span className="text-muted-foreground mb-0.5">Plást. ({stats.antiga.cargo.plastico.total})</span>
                     <span className="text-slate-500">{stats.antiga.cargo.plastico.pendente}P / <span className="text-green-600">{stats.antiga.cargo.plastico.carregada}C</span></span>
