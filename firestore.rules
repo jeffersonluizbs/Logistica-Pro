@@ -23,6 +23,21 @@ service cloud.firestore {
       return request.auth != null;
     }
     
+    function isAdmin() {
+      return isAuthenticated() && request.auth.token.email in [
+        'caio.santos@tramontina.com',
+        'renato.dantas@tramontina.com',
+        'thiago.hlima@tramontina.com',
+        'jemerson.souza@tramontina.com',
+        'sandriny.santana@tramontina.com',
+        'jefferson.silva3@tramontina.com',
+        'rosiane.araujo@tramontina.com',
+        'leonildo.lima@tramontina.com',
+        'willian.bernardo@tramontina.com',
+        'leonardo.viana@tramontina.com'
+      ];
+    }
+    
     function isOwner(userId) {
       return isAuthenticated() && request.auth.uid == userId;
     }
@@ -35,17 +50,18 @@ service cloud.firestore {
              data.deliveries is list &&
              (!('releasedToLoading' in data) || data.releasedToLoading is bool) &&
              (data.createdAt is number || data.createdAt is timestamp) &&
-             data.createdBy is string && data.createdBy == request.auth.uid;
+             data.createdBy is string;
     }
 
     match /routes/{routeId} {
       allow read: if isAuthenticated();
-      allow create: if isAuthenticated() && isValidRoute(request.resource.data);
-      allow update: if isAuthenticated() && 
+      allow create: if isAdmin() && 
                     isValidRoute(request.resource.data) && 
-                    resource.data.createdBy == request.auth.uid &&
+                    request.resource.data.createdBy == request.auth.uid;
+      allow update: if isAdmin() && 
+                    isValidRoute(request.resource.data) && 
                     request.resource.data.createdBy == resource.data.createdBy;
-      allow delete: if isAuthenticated() && resource.data.createdBy == request.auth.uid;
+      allow delete: if isAdmin();
     }
     
     match /users/{userId} {

@@ -115,8 +115,22 @@ const REGIOES = [
   'Sul'
 ];
 
+const ADMIN_EMAILS = [
+  'caio.santos@tramontina.com',
+  'renato.dantas@tramontina.com',
+  'thiago.hlima@tramontina.com',
+  'jemerson.souza@tramontina.com',
+  'sandriny.santana@tramontina.com',
+  'jefferson.silva3@tramontina.com',
+  'rosiane.araujo@tramontina.com',
+  'leonildo.lima@tramontina.com',
+  'willian.bernardo@tramontina.com',
+  'leonardo.viana@tramontina.com'
+];
+
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
+  const isAdminUser = user?.email && ADMIN_EMAILS.includes(user.email);
   const [routes, setRoutes] = useState<Route[]>([]);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [formData, setFormData] = useState<RouteFormData>(INITIAL_FORM_DATA);
@@ -386,8 +400,8 @@ export default function App() {
   };
 
   const handleEdit = (route: Route) => {
-    if (route.createdBy !== user?.uid) {
-      alert("Você só pode editar rotas criadas por você.");
+    if (!isAdminUser) {
+      alert("Apenas administradores podem editar rotas.");
       return;
     }
     setFormData({
@@ -402,8 +416,8 @@ export default function App() {
   };
 
   const handleDelete = async (id: string, createdBy: string) => {
-    if (createdBy !== user?.uid) {
-      alert("Você só pode excluir rotas criadas por você.");
+    if (!isAdminUser) {
+      alert("Apenas administradores podem excluir rotas.");
       return;
     }
     if (window.confirm('Tem certeza que deseja excluir esta rota?')) {
@@ -422,6 +436,10 @@ export default function App() {
   };
 
   const handleOpenReleaseDialog = (route: Route) => {
+    if (!isAdminUser) {
+      alert("Apenas administradores podem liberar rotas.");
+      return;
+    }
     setRouteToRelease(route);
     setReleaseDate(new Date().toISOString().split('T')[0]);
   };
@@ -485,6 +503,10 @@ export default function App() {
   const isRouteLoaded = (route: Route) => getRouteLoadingStatus(route) === 'Embarcado';
 
   const handleRevertEmbarcado = async (route: Route) => {
+    if (!isAdminUser) {
+      alert("Apenas administradores podem reverter o status das rotas.");
+      return;
+    }
     if (window.confirm("Deseja forçar o status desta rota para PENDENTE?\n(Isso ignorará o último 'Embarcado' e permitirá liberar a rota novamente se necessário)")) {
       try {
         await routeService.revertStatus(route.id, 'pendente');
@@ -589,8 +611,9 @@ export default function App() {
   return (
     <div className="flex h-screen w-full bg-background overflow-hidden font-sans text-[13px]">
       {/* Sidebar - Form Area */}
-      <aside className={`fixed inset-y-0 left-0 z-50 w-[320px] bg-white border-r border-border p-5 flex flex-col gap-4 overflow-y-auto transition-transform duration-300 transform ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'} lg:relative lg:translate-x-0 ${!isSidebarOpen && 'lg:hidden'}`}>
-        <header className="mb-2 flex items-center justify-between">
+      {isAdminUser && (
+        <aside className={`fixed inset-y-0 left-0 z-50 w-[320px] bg-white border-r border-border p-5 flex flex-col gap-4 overflow-y-auto transition-transform duration-300 transform ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'} lg:relative lg:translate-x-0 ${!isSidebarOpen && 'lg:hidden'}`}>
+          <header className="mb-2 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <div className="bg-primary p-1.5 rounded-lg">
               <Truck className="w-5 h-5 text-white" />
@@ -863,21 +886,24 @@ export default function App() {
             {isSaving ? 'Salvando (Buscando Notas)...' : (editingId ? 'Salvar Alterações' : 'Finalizar Rota')}
           </Button>
           
-          {editingId && (
-            <Button type="button" variant="outline" onClick={handleCloseDialog} className="w-full h-10">
-              Cancelar Edição
-            </Button>
-          )}
-        </form>
-      </aside>
+            {editingId && (
+              <Button type="button" variant="outline" onClick={handleCloseDialog} className="w-full h-10">
+                Cancelar Edição
+              </Button>
+            )}
+          </form>
+        </aside>
+      )}
 
       {/* Main Content */}
       <main className="flex-1 flex flex-col p-6 gap-5 overflow-hidden relative">
         {/* Mobile Header */}
         <div className="lg:hidden flex items-center justify-between mb-2">
-          <Button variant="outline" size="icon" onClick={() => setIsSidebarOpen(true)}>
-            <Menu className="w-5 h-5" />
-          </Button>
+          {isAdminUser && (
+            <Button variant="outline" size="icon" onClick={() => setIsSidebarOpen(true)}>
+              <Menu className="w-5 h-5" />
+            </Button>
+          )}
           <div className="flex items-center gap-2">
             <Truck className="w-5 h-5 text-primary" />
             <span className="font-bold text-primary">LOGÍSTICA</span>
@@ -1056,15 +1082,17 @@ export default function App() {
             <section className="flex-1 bg-white border border-border rounded-[10px] flex flex-col overflow-hidden">
               <div className="p-4 border-b border-border bg-slate-50/50 flex flex-wrap items-center justify-between gap-4">
                 <div className="flex items-center gap-3 flex-1 min-w-[300px]">
-                  <Button 
-                    variant="outline" 
-                    size="icon" 
-                    className="hidden lg:flex h-8 w-8" 
-                    onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-                    title={isSidebarOpen ? "Esconder Menu" : "Mostrar Menu"}
-                  >
-                    <Menu className="w-4 h-4" />
-                  </Button>
+                  {isAdminUser && (
+                    <Button 
+                      variant="outline" 
+                      size="icon" 
+                      className="hidden lg:flex h-8 w-8" 
+                      onClick={() => setIsSidebarOpen(!isSidebarOpen)}
+                      title={isSidebarOpen ? "Esconder Menu" : "Mostrar Menu"}
+                    >
+                      <Menu className="w-4 h-4" />
+                    </Button>
+                  )}
                   <div className="relative flex-1">
                     <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
                     <Input 
@@ -1155,6 +1183,7 @@ export default function App() {
                     <RouteTable 
                       routes={routesNova} 
                       user={user} 
+                      isAdminUser={isAdminUser}
                       searchTerm={searchTerm}
                       getRouteLoadingStatus={getRouteLoadingStatus}
                       onEdit={handleEdit} 
@@ -1173,6 +1202,7 @@ export default function App() {
                     <RouteTable 
                       routes={routesAntiga} 
                       user={user} 
+                      isAdminUser={isAdminUser}
                       searchTerm={searchTerm}
                       getRouteLoadingStatus={getRouteLoadingStatus}
                       onEdit={handleEdit} 
@@ -1239,6 +1269,7 @@ export default function App() {
 interface RouteTableProps {
   routes: Route[];
   user: any;
+  isAdminUser: boolean;
   searchTerm?: string;
   getRouteLoadingStatus: (route: Route) => string | null;
   onEdit: (route: Route) => void;
@@ -1247,7 +1278,7 @@ interface RouteTableProps {
   onRevertEmbarcado: (route: Route) => void;
 }
 
-function RouteTable({ routes, user, searchTerm = '', getRouteLoadingStatus, onEdit, onDelete, onRelease, onRevertEmbarcado }: RouteTableProps) {
+function RouteTable({ routes, user, isAdminUser, searchTerm = '', getRouteLoadingStatus, onEdit, onDelete, onRelease, onRevertEmbarcado }: RouteTableProps) {
   const getCargoBadgeColor = (type: string) => {
     switch (type) {
       case 'plastico': return 'bg-emerald-100 text-emerald-700 border-emerald-200';
@@ -1273,7 +1304,7 @@ function RouteTable({ routes, user, searchTerm = '', getRouteLoadingStatus, onEd
           <TableHead className="w-[80px] font-bold py-2 px-3">Rota</TableHead>
           <TableHead className="w-[100px] font-bold py-2 px-3">Carga</TableHead>
           <TableHead className="font-bold py-2 px-3">Entregas / Clientes</TableHead>
-          <TableHead className="w-[120px] text-right font-bold py-2 px-3">Ações</TableHead>
+          {isAdminUser && <TableHead className="w-[120px] text-right font-bold py-2 px-3">Ações</TableHead>}
         </TableRow>
       </TableHeader>
       <TableBody>
@@ -1350,9 +1381,9 @@ function RouteTable({ routes, user, searchTerm = '', getRouteLoadingStatus, onEd
                   ))}
                 </div>
               </TableCell>
-              <TableCell className="text-right py-2 px-3" onClick={(e) => e.stopPropagation()}>
-                <div className="flex justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                  {route.createdBy === user.uid && (
+              {isAdminUser && (
+                <TableCell className="text-right py-2 px-3" onClick={(e) => e.stopPropagation()}>
+                  <div className="flex justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                     <>
                       <Button 
                         variant="ghost" 
@@ -1380,9 +1411,9 @@ function RouteTable({ routes, user, searchTerm = '', getRouteLoadingStatus, onEd
                         <Trash2 className="w-3.5 h-3.5" />
                       </Button>
                     </>
-                  )}
-                </div>
-              </TableCell>
+                  </div>
+                </TableCell>
+              )}
             </TableRow>
             );
           })
